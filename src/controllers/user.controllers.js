@@ -151,12 +151,64 @@ export const getPendingProducts = catchAsync(async (req, res) => {
         throw new AppError(400, 'From and To hubs are required');
     }
 
-    const pendingProducts = await Product.find({
-        fromHubId,
-        toHubId,
-        status: 'Pending',
-        isAccepted: true,
-    }).populate('fromHubId toHubId shipperId receiverId');
+    const pendingProducts = await Product.aggregate([
+        {
+            $match: {
+                fromHubId: new mongoose.Types.ObjectId(fromHubId),
+                toHubId: new mongoose.Types.ObjectId(toHubId),
+                status: 'Pending',
+            }
+        },
+        {
+            $lookup: {
+                from: 'requests',
+                localField: '_id',
+                foreignField: 'productId',
+                as: 'requests'
+            }
+        },
+        {
+            $match: {
+                'requests.isAccepted': true
+            }
+        },
+        {
+            $lookup: {
+                from: 'hubs',
+                localField: 'fromHubId',
+                foreignField: '_id',
+                as: 'fromHubId'
+            }
+        },
+        { $unwind: '$fromHubId' },
+        {
+            $lookup: {
+                from: 'hubs',
+                localField: 'toHubId',
+                foreignField: '_id',
+                as: 'toHubId'
+            }
+        },
+        { $unwind: '$toHubId' },
+        {
+            $lookup: {
+                from: 'users',
+                localField: 'shipperId',
+                foreignField: '_id',
+                as: 'shipperId'
+            }
+        },
+        { $unwind: '$shipperId' },
+        {
+            $lookup: {
+                from: 'users',
+                localField: 'receiverId',
+                foreignField: '_id',
+                as: 'receiverId'
+            }
+        },
+        { $unwind: '$receiverId' },
+    ]);
 
     const productsWithCustomAmount = pendingProducts.map((product) => {
         const distance = calculateDistance(product.fromHubId.coordinates, product.toHubId.coordinates);
@@ -182,6 +234,7 @@ export const getPendingProducts = catchAsync(async (req, res) => {
         data: productsWithCustomAmount,
     });
 });
+
 
 // Request to take a product (User acting as transporter)
 export const takeProduct = catchAsync(async (req, res) => {

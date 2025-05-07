@@ -27,6 +27,9 @@ export const getProfile = catchAsync(async (req, res) => {
 export const manageRequest = catchAsync(async (req, res) => {
     const { requestId, action } = req.body;
 
+    // Log incoming request for debugging
+    console.log('Incoming Request:', req.body);
+
     if (!requestId || !action) {
         throw new AppError(400, 'Request ID and action are required');
     }
@@ -41,51 +44,81 @@ export const manageRequest = catchAsync(async (req, res) => {
     }
 
     const product = request.productId;
+
+    if (!product || !product.fromHubId || !product.toHubId) {
+        throw new AppError(500, 'Product or hub information is missing');
+    }
+
     const hubIdToCheck =
         request.type === 'pickup' || request.type === 'print'
             ? product.fromHubId._id
             : product.toHubId._id;
+
+    if (!req.user?.hubId) {
+        throw new AppError(401, 'Hub ID not associated with authenticated user');
+    }
 
     if (req.user.hubId.toString() !== hubIdToCheck.toString()) {
         throw new AppError(403, 'You are not authorized to manage this request');
     }
 
     if (action === 'approve') {
-        if (request.type === 'print') {
-            request.status = 'Approved';
-        } else if (request.type === 'pickup') {
-            product.transporterId = request.userId;
-            product.status = 'Assigned';
-            request.status = 'Approved';
-        } else if (request.type === 'scan') {
-            product.status = 'On the way';
-            product.locations.push({ hubId: product.fromHubId });
-            request.status = 'Approved';
+        switch (request.type) {
+            case 'print':
+                request.status = 'Approved';
+                break;
 
-            const transporter = await User.findById(request.userId);
-            transporter.totalProductsTransported += 1;
-            transporter.totalAmountTransported += product.amount;
-            await transporter.save();
-        } else if (request.type === 'delivery') {
-            product.status = 'Reached';
-            product.locations.push({ hubId: product.toHubId });
-            request.status = 'Approved';
+            case 'pickup':
+                product.transporterId = request.userId;
+                product.status = 'Assigned';
+                request.status = 'Approved';
+                break;
 
-            const transporter = await User.findById(request.userId);
-            transporter.totalProductsTransported += 1;
-            transporter.totalAmountTransported += product.amount;
-            await transporter.save();
-        } else if (request.type === 'receive') {
-            product.status = 'Pending Receipt Approval';
-            request.status = 'Approved';
-        } else if (request.type === 'receive-scan') {
-            product.status = 'Received';
-            request.status = 'Approved';
+            case 'scan':
+                product.status = 'On the way';
+                product.locations.push({ hubId: product.fromHubId });
+                request.status = 'Approved';
 
-            const receiver = await User.findById(request.userId);
-            receiver.totalProductsReceived += 1;
-            receiver.totalAmountReceived += product.amount;
-            await receiver.save();
+                const scanTransporter = await User.findById(request.userId);
+                if (scanTransporter) {
+                    scanTransporter.totalProductsTransported += 1;
+                    scanTransporter.totalAmountTransported += product.amount;
+                    await scanTransporter.save();
+                }
+                break;
+
+            case 'delivery':
+                product.status = 'Reached';
+                product.locations.push({ hubId: product.toHubId });
+                request.status = 'Approved';
+
+                const deliveryTransporter = await User.findById(request.userId);
+                if (deliveryTransporter) {
+                    deliveryTransporter.totalProductsTransported += 1;
+                    deliveryTransporter.totalAmountTransported += product.amount;
+                    await deliveryTransporter.save();
+                }
+                break;
+
+            case 'receive':
+                product.status = 'Pending Receipt Approval';
+                request.status = 'Approved';
+                break;
+
+            case 'receive-scan':
+                product.status = 'Received';
+                request.status = 'Approved';
+
+                const receiver = await User.findById(request.userId);
+                if (receiver) {
+                    receiver.totalProductsReceived += 1;
+                    receiver.totalAmountReceived += product.amount;
+                    await receiver.save();
+                }
+                break;
+
+            default:
+                throw new AppError(400, 'Invalid request type');
         }
 
         request.isAccepted = true;
@@ -95,14 +128,22 @@ export const manageRequest = catchAsync(async (req, res) => {
 
         if (request.type === 'print') {
             product.status = 'Canceled';
-            await product.save();
+            await product.save(); 
         }
     } else {
         throw new AppError(400, 'Invalid action');
     }
 
+    // Save changes
     await product.save();
     await request.save();
+
+    // Debug the final state
+    console.log('Final Saved Request:', {
+        id: request._id,
+        status: request.status,
+        isAccepted: request.isAccepted,
+    });
 
     sendResponse(res, {
         statusCode: 200,
