@@ -14,7 +14,7 @@ const hubSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
 });
 
-const Hub = mongoose.model('Hub', hubSchema);
+export const Hub = mongoose.model('Hub', hubSchema);
 
 // Pre-populate hubs if none exist
 const initialHubs = [
@@ -37,5 +37,4 @@ Hub.countDocuments().then((count) => {
             .catch((err) => console.error('Error inserting hubs:', err));
     }
 });
-
-export default Hub;
+ 
