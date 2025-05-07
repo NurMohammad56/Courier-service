@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
-import AppError from '../utility/appError.js';
-import User from '../models/user.js';
+import AppError from '../errors/AppError.js';
+import {User} from '../models/user.models.js';
 
 export const isAuthenticated = async (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];

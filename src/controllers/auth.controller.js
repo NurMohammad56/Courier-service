@@ -1,7 +1,7 @@
-import { catchAsync } from '../utilty/catchAsync.js';
+import catchAsync from '../utilty/catchAsync.js';
 import AppError from '../errors/AppError.js';
 import { sendResponse, generateVerificationCode, sendVerificationCode, sendPasswordResetCode } from '../utilty/helper.utilty.js';
-import User from '../models/user.js';
+import { User } from '../models/user.models.js';
 import jwt from 'jsonwebtoken';
 
 // Register

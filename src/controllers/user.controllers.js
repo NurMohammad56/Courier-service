@@ -1,10 +1,10 @@
-import { catchAsync } from '../middlewares/catchAsync.js';
-import AppError from '../utility/appError.js';
-import { sendResponse, generateUniqueCode, calculateDistance, calculateAmount } from '../utility/helper.js';
-import Hub from '../models/hub.js';
-import User from '../models/user.js';
-import Product from '../models/product.js';
-import Request from '../models/request.js';
+import catchAsync from '../utilty/catchAsync.js';
+import AppError from '../errors/AppError.js';
+import { sendResponse, generateUniqueCode, calculateDistance, calculateAmount } from '../utilty/helper.utilty.js';
+import { Hub } from '../models/hubs.models.js';
+import { User } from '../models/user.models.js';
+import { Product } from '../models/product.models.js';
+import { Request } from '../models/request.models.js';
 
 // Create a new shipment (User acting as shipper)
 export const createShipment = catchAsync(async (req, res) => {

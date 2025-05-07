@@ -1,4 +1,4 @@
-import Product from '../models/product.js';
+import {Product} from '../models/product.models.js';
 
 let codeCounter = 202000;
 export const generateUniqueCode = async () => {
