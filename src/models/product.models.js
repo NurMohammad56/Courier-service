@@ -27,6 +27,10 @@ const productSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    isAccepted: {
+        type: Boolean,
+        default: false
+    },
     fromHubId:
     {
         type: mongoose.Schema.Types.ObjectId,
@@ -70,18 +74,51 @@ const productSchema = new mongoose.Schema({
     },
     locations: [
         {
-            hubId:
-            {
+            hubId: {
                 type: mongoose.Schema.Types.ObjectId,
                 ref: 'Hub'
             },
-            timestamp: { type: Date, default: Date.now },
+            userId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User'
+            },
+            action: {
+                type: String,
+                enum: ['received', 'processed', 'dispatched', 'exception'],
+                required: true
+            },
+            notes: String,
+            timestamp: {
+                type: Date,
+                default: Date.now
+            },
+            coordinates: {
+                lat: Number,
+                lng: Number
+            }
         },
     ],
     liveCoordinates: {
-        lat: { type: Number, required: false },
-        lng: { type: Number, required: false },
-        timestamp: { type: Date, default: Date.now },
+        lat: {
+            type: Number,
+            min: -90,
+            max: 90,
+            required: false
+        },
+        lng: {
+            type: Number,
+            min: -180,
+            max: 180,
+            required: false
+        },
+        timestamp: {
+            type: Date,
+            default: Date.now
+        },
+        transporterId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
     },
 });
 

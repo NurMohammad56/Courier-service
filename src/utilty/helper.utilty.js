@@ -97,3 +97,10 @@ export const uploadOnCloudinary = (fileBuffer) => {
     stream.end(fileBuffer);
   });
 };
+
+export const calculateCustomAmount = (weight, distance) => {
+    const weightFactor = 3; // Custom rate per kg
+    const distanceFactor = 0.8; // Custom rate per km
+    const baseFee = 10; // Base fee for calculation
+    return parseFloat((baseFee + weight * weightFactor + distance * distanceFactor).toFixed(2));
+};

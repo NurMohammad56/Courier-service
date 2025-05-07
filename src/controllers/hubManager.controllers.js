@@ -41,7 +41,11 @@ export const manageRequest = catchAsync(async (req, res) => {
     }
 
     const product = request.productId;
-    const hubIdToCheck = request.type === 'pickup' || request.type === 'print' ? product.fromHubId._id : product.toHubId._id;
+    const hubIdToCheck =
+        request.type === 'pickup' || request.type === 'print'
+            ? product.fromHubId._id
+            : product.toHubId._id;
+
     if (req.user.hubId.toString() !== hubIdToCheck.toString()) {
         throw new AppError(403, 'You are not authorized to manage this request');
     }
@@ -83,8 +87,12 @@ export const manageRequest = catchAsync(async (req, res) => {
             receiver.totalAmountReceived += product.amount;
             await receiver.save();
         }
+
+        request.isAccepted = true;
     } else if (action === 'reject') {
         request.status = 'Rejected';
+        request.isAccepted = false;
+
         if (request.type === 'print') {
             product.status = 'Canceled';
             await product.save();
