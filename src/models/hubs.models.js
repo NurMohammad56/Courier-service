@@ -13,7 +13,7 @@ const hubSchema = new mongoose.Schema({
         lng: { type: Number, required: true },
     },
     createdAt: { type: Date, default: Date.now },
-    uniqueCode: { type: String, unique: true },
+    hubCode: { type: String, unique: true },
 });
 
 // generate a unique code when creating a new hub
@@ -23,11 +23,11 @@ hubSchema.pre('save', async function (next) {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     for (let i = 0; i < 6; i++) {
         code += characters.charAt(Math.floor(Math.random() * characters.length));
-    const existingHub = await Hub.findOne({ uniqueCode: code });
+    const existingHub = await Hub.findOne({ hubCode: code });
     if (existingHub) {
         return next(new Error('Unique code generation conflict. Please try again.'));
     }
-    this.uniqueCode = code;
+    this.hubCode = code;
     }
     next();
 });

@@ -14,8 +14,12 @@ export const createShipment = catchAsync(async (req, res) => {
         throw new AppError(400, 'All fields are required');
     }
 
-    const fromHub = await Hub.findById(fromHubId);
-    const toHub = await Hub.findById(toHubId);
+    // Fetch hubs with additional details
+    const [fromHub, toHub] = await Promise.all([
+        Hub.findById(fromHubId).select('name coordinates hubCode'),
+        Hub.findById(toHubId).select('name coordinates hubCode')
+    ]);
+
     if (!fromHub || !toHub) {
         throw new AppError(404, 'Hub not found');
     }
@@ -49,26 +53,55 @@ export const createShipment = catchAsync(async (req, res) => {
     shipper.totalAmountShipped += amount;
     await shipper.save();
 
+    // Enhanced response
+    const responseData = {
+        uniqueCode: product.uniqueCode,
+        product: {
+            _id: product._id,
+            uniqueCode: product.uniqueCode,
+            name: product.name,
+            description: product.description,
+            weight: product.weight,
+            measurement: product.measurement,
+            status: product.status,
+            amount: product.amount,
+            fromHubId: {
+                _id: fromHub._id,
+                name: fromHub.name,
+                hubCode: fromHub.hubCode,
+                coordinates: fromHub.coordinates
+            },
+            toHubId: {
+                _id: toHub._id,
+                name: toHub.name,
+                hubCode: toHub.hubCode,
+                coordinates: toHub.coordinates
+            },
+            liveCoordinates: null,
+            locations: [],
+            createdAt: product.createdAt
+        },
+        nextSteps: {
+            action: "print_barcode",
+            required: true,
+            hubCode: fromHub.hubCode,
+            hubId: fromHub._id
+        }
+    };
+
     sendResponse(res, {
         statusCode: 201,
         success: true,
         message: 'Shipment created successfully.',
-        data: {
-            uniqueCode,
-            product,
-            fromHub: {
-                id: fromHub._id,
-                name: fromHub.name
-            }
-        },
+        data: responseData
     });
 });
 
 // Request to print a product (User acting as shipper)
 export const requestPrint = catchAsync(async (req, res) => {
-    const { productId, hubId } = req.body;
+    const { productId, hubCode } = req.body;
 
-    if (!productId || !hubId) {
+    if (!productId || !hubCode) {
         throw new AppError(400, 'Product ID and Hub ID are required');
     }
 
@@ -77,7 +110,7 @@ export const requestPrint = catchAsync(async (req, res) => {
         throw new AppError(404, 'Product not found');
     }
 
-    const hub = await Hub.findById(hubId);
+    const hub = await Hub.findOne({ hubCode });
     if (!hub) {
         throw new AppError(404, 'Hub not found');
     }
@@ -122,13 +155,31 @@ export const getPendingProducts = catchAsync(async (req, res) => {
         fromHubId,
         toHubId,
         status: 'Pending',
+        isAccepted: true,
     }).populate('fromHubId toHubId shipperId receiverId');
+
+    const productsWithCustomAmount = pendingProducts.map((product) => {
+        const distance = calculateDistance(product.fromHubId.coordinates, product.toHubId.coordinates);
+        const customAmount = calculateAmount(product.weight, distance) * 0.8;
+
+        return {
+            productName: product.name,
+            uniqueCode: product.uniqueCode,
+            weight: `${product.weight}kg`,
+            amount: `$${product.amount}`,
+            fromHubName: product.fromHubId.name,
+            toHubName: product.toHubId.name,
+            shipperId: product.shipperId._id,
+            receiverId: product.receiverId._id,
+            customAmount,
+        };
+    });
 
     sendResponse(res, {
         statusCode: 200,
         success: true,
         message: 'Pending products retrieved successfully',
-        data: pendingProducts,
+        data: productsWithCustomAmount,
     });
 });
 
