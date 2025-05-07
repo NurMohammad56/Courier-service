@@ -7,11 +7,29 @@ const hubSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
+    managerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     coordinates: {
         lat: { type: Number, required: true },
         lng: { type: Number, required: true },
     },
     createdAt: { type: Date, default: Date.now },
+    uniqueCode: { type: String, unique: true },
+});
+
+// generate a unique code when creating a new hub
+hubSchema.pre('save', async function (next) {
+    if (!this.isNew) return next();
+    let code = '';
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    for (let i = 0; i < 6; i++) {
+        code += characters.charAt(Math.floor(Math.random() * characters.length));
+    const existingHub = await Hub.findOne({ uniqueCode: code });
+    if (existingHub) {
+        return next(new Error('Unique code generation conflict. Please try again.'));
+    }
+    this.uniqueCode = code;
+    }
+    next();
 });
 
 export const Hub = mongoose.model('Hub', hubSchema);

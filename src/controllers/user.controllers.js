@@ -49,9 +49,53 @@ export const createShipment = catchAsync(async (req, res) => {
     shipper.totalAmountShipped += amount;
     await shipper.save();
 
+    sendResponse(res, {
+        statusCode: 201,
+        success: true,
+        message: 'Shipment created successfully.',
+        data: {
+            uniqueCode,
+            product,
+            fromHub: {
+                id: fromHub._id,
+                name: fromHub.name
+            }
+        },
+    });
+});
+
+// Request to print a product (User acting as shipper)
+export const requestPrint = catchAsync(async (req, res) => {
+    const { productId, hubId } = req.body;
+
+    if (!productId || !hubId) {
+        throw new AppError(400, 'Product ID and Hub ID are required');
+    }
+
+    const product = await Product.findById(productId);
+    if (!product) {
+        throw new AppError(404, 'Product not found');
+    }
+
+    const hub = await Hub.findById(hubId);
+    if (!hub) {
+        throw new AppError(404, 'Hub not found');
+    }
+
+    // Check if this product already has a pending print request
+    const existingRequest = await Request.findOne({
+        productId: product._id,
+        status: 'pending'
+    });
+
+    if (existingRequest) {
+        throw new AppError(400, 'A print request for this product is already pending');
+    }
+
     // Create a request for hub manager to approve printing
     const request = new Request({
         productId: product._id,
+        hubId: hub._id,
         userId: req.user._id,
         type: 'print',
     });
@@ -60,15 +104,12 @@ export const createShipment = catchAsync(async (req, res) => {
     sendResponse(res, {
         statusCode: 201,
         success: true,
-        message: 'Shipment created successfully. Awaiting hub manager approval to generate the barcode.',
+        message: 'Print request submitted to hub manager successfully.',
         data: {
-            uniqueCode,
-            product,
             requestId: request._id,
         },
     });
 });
-
 // Get pending products for a hub (User acting as transporter)
 export const getPendingProducts = catchAsync(async (req, res) => {
     const { fromHubId, toHubId } = req.body;
@@ -307,7 +348,7 @@ export const editProfile = catchAsync(async (req, res) => {
     if (req.file) {
         try {
             const image = await uploadOnCloudinary(req.file.buffer, 'users');
-            req.body.image = image.secure_url; 
+            req.body.image = image.secure_url;
         } catch (error) {
             throw new AppError(500, 'Error uploading image');
         }

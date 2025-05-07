@@ -30,7 +30,8 @@ const userSchema = new mongoose.Schema({
     {
         type: String,
         enum: ['admin', 'hubManager', 'user'],
-        required: true
+        default: 'user'
+    
     },
     password:
     {
@@ -96,6 +97,16 @@ const userSchema = new mongoose.Schema({
     {
         type: Date,
         default: Date.now
+    },
+    departureHub:
+    {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Hub'
+    }, // For transporters
+    arrivalHub:
+    {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Hub'
     },
 });
 
