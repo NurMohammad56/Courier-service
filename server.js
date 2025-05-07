@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import http from 'http';
 import { Server } from 'socket.io'
 import dbConnection from './config/dbConnection.js';
 import globalErrorHandler from './src/middlewares/globalError.middlewares.js';
