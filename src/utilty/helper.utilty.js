@@ -1,6 +1,7 @@
+import dotenv from 'dotenv';
 import {Product} from '../models/product.models.js';
 import { v2 as cloudinary } from "cloudinary";
-import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
 dotenv.config();
 
 let codeCounter = 202000;
@@ -32,7 +33,7 @@ export const calculateDistance = (coords1, coords2) => {
 export const calculateAmount = (weight, distance) => {
     const ratePerKg = 5;
     const ratePerKm = 1;
-    return weight * ratePerKg + distance * ratePerKm;
+    return parseFloat((weight * ratePerKg + distance * ratePerKm).toFixed(2));
 };
 
 export const sendResponse = (res, { statusCode, success, message, data }) => {
@@ -45,8 +46,6 @@ export const sendResponse = (res, { statusCode, success, message, data }) => {
 };
 
 // Email setup
-import nodemailer from 'nodemailer';
-
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {

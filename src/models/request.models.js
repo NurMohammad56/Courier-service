@@ -13,7 +13,7 @@ const requestSchema = new mongoose.Schema({
     },
     type:
     {
-        type: String, enum: ['pickup', 'delivery', 'receive'],
+        type: String, enum: ['pickup', 'delivery', 'receive', 'print'],
         required: true
     },
     status:

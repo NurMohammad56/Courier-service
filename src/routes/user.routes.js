@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   createShipment,
+  requestPrint,
   getPendingProducts,
   takeProduct,
   scanBarcode,
@@ -11,6 +12,7 @@ import {
   getHistory,
   getProductLocation,
   editProfile,
+  getProfile,
   changePassword,
 } from '../controllers/user.controllers.js';
 import { updateLocation, getLiveLocation} from '../controllers/location.controllers.js';
@@ -22,6 +24,7 @@ router.use(isAuthenticated);
 router.use(restrictTo('user'));
 
 router.post('/create-shipment', createShipment);
+router.post('/request-print', requestPrint);
 router.post('/pending-products', getPendingProducts);
 router.post('/take-product', takeProduct);
 router.post('/scan-barcode', scanBarcode);
@@ -33,6 +36,7 @@ router.get('/history', getHistory);
 router.get('/location/:productId', getProductLocation);
 router.put('/update-location', updateLocation);
 router.get('/live-location/:productId', getLiveLocation);
+router.get('/profile', getProfile);
 router.put('/edit-profile', editProfile);
 router.put('/change-password', changePassword);
 
