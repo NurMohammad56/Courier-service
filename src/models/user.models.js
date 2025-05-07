@@ -8,6 +8,9 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    username: {
+        type: String,
+    },
     email:
     {
         type: String,
@@ -18,6 +21,10 @@ const userSchema = new mongoose.Schema({
     {
         type: String,
         required: true,
+    },
+    image:
+    {
+        type: String,
     },
     role:
     {
@@ -120,5 +127,14 @@ userSchema.methods.generateTokens = function () {
     this.refreshToken = refreshToken;
     return { accessToken, refreshToken };
 };
+
+// Generate username automatically based on name and add a @ and 2 digit number
+userSchema.pre('save', function (next) {
+    if (this.isModified('name')) {
+        const username = this.name.toLowerCase().replace(/\s+/g, '');
+        this.username = '@' + username + Math.floor(Math.random() * 100);
+    }
+    next();
+});
 
 export const User = mongoose.model('User', userSchema);

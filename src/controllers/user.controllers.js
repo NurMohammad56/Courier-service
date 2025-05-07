@@ -1,6 +1,6 @@
 import catchAsync from '../utilty/catchAsync.js';
 import AppError from '../errors/AppError.js';
-import { sendResponse, generateUniqueCode, calculateDistance, calculateAmount } from '../utilty/helper.utilty.js';
+import { sendResponse, generateUniqueCode, calculateDistance, calculateAmount, uploadOnCloudinary } from '../utilty/helper.utilty.js';
 import { Hub } from '../models/hubs.models.js';
 import { User } from '../models/user.models.js';
 import { Product } from '../models/product.models.js';
@@ -285,12 +285,32 @@ export const getProductLocation = catchAsync(async (req, res) => {
     });
 });
 
+// Get user profile
+export const getProfile = catchAsync(async (req, res) => {
+    const user = await User.findById(req.user._id).select('name username image')
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: 'User profile retrieved successfully',
+        data: user,
+    });
+});
+
 // Edit Profile
 export const editProfile = catchAsync(async (req, res) => {
     const { name, email } = req.body;
 
     if (!name || !email) {
         throw new AppError(400, 'Name and email are required');
+    }
+
+    if (req.file) {
+        try {
+            const image = await uploadOnCloudinary(req.file.buffer, 'users');
+            req.body.image = image.secure_url; 
+        } catch (error) {
+            throw new AppError(500, 'Error uploading image');
+        }
     }
 
     const user = await User.findById(req.user._id);
@@ -300,6 +320,11 @@ export const editProfile = catchAsync(async (req, res) => {
 
     user.name = name;
     user.email = email;
+
+    if (req.body.image) {
+        user.image = req.body.image;
+    }
+
     await user.save();
 
     sendResponse(res, {
