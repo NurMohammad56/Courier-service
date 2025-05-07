@@ -1,8 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import dbConnection from './db_config/dbConnection.js';
-import globalErrorHandler from './src/middlewares/globalErrorHandler.js';
-import notFound from './src/middlewares/notFound.js';
+import globalErrorHandler from './src/middlewares/globalError.middlewares.js';
+import notFound from './src/middlewares/notFound.middlewares.js';
 import cors from 'cors';
 const PORT = process.env.PORT || 5001;
 
