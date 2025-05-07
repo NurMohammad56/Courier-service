@@ -78,6 +78,11 @@ const productSchema = new mongoose.Schema({
             timestamp: { type: Date, default: Date.now },
         },
     ],
+    liveCoordinates: {
+        lat: { type: Number, required: false },
+        lng: { type: Number, required: false },
+        timestamp: { type: Date, default: Date.now },
+    },
 });
 
 export const Product = mongoose.model('Product', productSchema);
