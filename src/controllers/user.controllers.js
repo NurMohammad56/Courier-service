@@ -5,6 +5,7 @@ import { Hub } from '../models/hubs.models.js';
 import { User } from '../models/user.models.js';
 import { Product } from '../models/product.models.js';
 import { Request } from '../models/request.models.js';
+import mongoose from 'mongoose';
 
 // Create a new shipment (User acting as shipper)
 export const createShipment = catchAsync(async (req, res) => {
@@ -143,6 +144,7 @@ export const requestPrint = catchAsync(async (req, res) => {
         },
     });
 });
+
 // Get pending products for a hub (User acting as transporter)
 export const getPendingProducts = catchAsync(async (req, res) => {
     const { fromHubId, toHubId } = req.body;
@@ -212,18 +214,17 @@ export const getPendingProducts = catchAsync(async (req, res) => {
 
     const productsWithCustomAmount = pendingProducts.map((product) => {
         const distance = calculateDistance(product.fromHubId.coordinates, product.toHubId.coordinates);
-        const customAmount = calculateAmount(product.weight, distance) * 0.8;
+        const amount = parseFloat(calculateAmount(product.weight, distance) * 0.3);
 
         return {
             productName: product.name,
             uniqueCode: product.uniqueCode,
             weight: `${product.weight}kg`,
-            amount: `$${product.amount}`,
             fromHubName: product.fromHubId.name,
             toHubName: product.toHubId.name,
             shipperId: product.shipperId._id,
             receiverId: product.receiverId._id,
-            customAmount,
+            amount,
         };
     });
 
@@ -234,7 +235,6 @@ export const getPendingProducts = catchAsync(async (req, res) => {
         data: productsWithCustomAmount,
     });
 });
-
 
 // Request to take a product (User acting as transporter)
 export const takeProduct = catchAsync(async (req, res) => {

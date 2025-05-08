@@ -179,8 +179,8 @@ const fetchRequests = async (req, types) => {
             populate: [
                 { path: 'fromHubId' },
                 { path: 'toHubId' },
-                { path: 'shipperId', select: 'name' },
-                { path: 'receiverId', select: 'name' },
+                { path: 'shipperId', select: 'name email phone' },
+                { path: 'receiverId', select: 'name email phone' },
             ],
         })
         .populate('userId');
@@ -210,10 +210,22 @@ const fetchRequests = async (req, types) => {
     const formattedRequests = paginatedRequests.map((request) => ({
         requestId: request._id,
         productCode: request.productId.uniqueCode,
-        shipperName: request.productId.shipperId.name,
-        receiverName: request.productId.receiverId.name,
+        productName: request.productId.name,
+        weight: request.productId.weight,
+        measurement: request.productId.measurement,
+        shipper: {
+            name: request.productId.shipperId.name,
+            email: request.productId.shipperId.email,
+            phone: request.productId.shipperId.phone,
+        },
+        receiver: {
+            name: request.productId.receiverId.name,
+            email: request.productId.receiverId.email,
+            phone: request.productId.receiverId.phone,
+        },
         fromHub: request.productId.fromHubId.name,
         toHub: request.productId.toHubId.name,
+        price: request.productId.amount,
         type: request.type,
         createdAt: request.createdAt,
     }));
