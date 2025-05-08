@@ -18,7 +18,7 @@ export const createShipment = catchAsync(async (req, res) => {
     // Fetch hubs with additional details
     const [fromHub, toHub] = await Promise.all([
         Hub.findById(fromHubId).select('name coordinates hubCode'),
-        Hub.findById(toHubId).select('name coordinates hubCode')
+        Hub.findById(toHubId).select('name coordinates hubCode'),
     ]);
 
     if (!fromHub || !toHub) {
@@ -33,6 +33,7 @@ export const createShipment = catchAsync(async (req, res) => {
     const uniqueCode = await generateUniqueCode();
     const distance = calculateDistance(fromHub.coordinates, toHub.coordinates);
     const amount = calculateAmount(weight, distance);
+    const transporterAmount = parseFloat(amount * 0.3); 
 
     const product = new Product({
         uniqueCode,
@@ -45,6 +46,7 @@ export const createShipment = catchAsync(async (req, res) => {
         shipperId: req.user._id,
         receiverId,
         amount,
+        transporterAmount, 
     });
 
     await product.save();
@@ -54,7 +56,6 @@ export const createShipment = catchAsync(async (req, res) => {
     shipper.totalAmountShipped += amount;
     await shipper.save();
 
-    // Enhanced response
     const responseData = {
         uniqueCode: product.uniqueCode,
         product: {
@@ -66,38 +67,38 @@ export const createShipment = catchAsync(async (req, res) => {
             measurement: product.measurement,
             status: product.status,
             amount: product.amount,
+            transporterAmount: product.transporterAmount,
             fromHubId: {
                 _id: fromHub._id,
                 name: fromHub.name,
                 hubCode: fromHub.hubCode,
-                coordinates: fromHub.coordinates
+                coordinates: fromHub.coordinates,
             },
             toHubId: {
                 _id: toHub._id,
                 name: toHub.name,
                 hubCode: toHub.hubCode,
-                coordinates: toHub.coordinates
+                coordinates: toHub.coordinates,
             },
             liveCoordinates: null,
             locations: [],
-            createdAt: product.createdAt
+            createdAt: product.createdAt,
         },
         nextSteps: {
-            action: "print_barcode",
+            action: 'print_barcode',
             required: true,
             hubCode: fromHub.hubCode,
-            hubId: fromHub._id
-        }
+            hubId: fromHub._id,
+        },
     };
 
     sendResponse(res, {
         statusCode: 201,
         success: true,
         message: 'Shipment created successfully.',
-        data: responseData
+        data: responseData,
     });
 });
-
 // Request to print a product (User acting as shipper)
 export const requestPrint = catchAsync(async (req, res) => {
     const { productId, hubCode } = req.body;
@@ -213,18 +214,17 @@ export const getPendingProducts = catchAsync(async (req, res) => {
     ]);
 
     const productsWithCustomAmount = pendingProducts.map((product) => {
-        const distance = calculateDistance(product.fromHubId.coordinates, product.toHubId.coordinates);
-        const amount = parseFloat(calculateAmount(product.weight, distance) * 0.3);
 
         return {
             productName: product.name,
+            productId: product._id,
             uniqueCode: product.uniqueCode,
             weight: `${product.weight}kg`,
             fromHubName: product.fromHubId.name,
             toHubName: product.toHubId.name,
             shipperId: product.shipperId._id,
             receiverId: product.receiverId._id,
-            amount,
+            amount: product.transporterAmount,
         };
     });
 
@@ -236,18 +236,26 @@ export const getPendingProducts = catchAsync(async (req, res) => {
     });
 });
 
-// Request to take a product (User acting as transporter)
-export const takeProduct = catchAsync(async (req, res) => {
-    const { productId } = req.body;
+// Scan barcode and take product (User acting as transporter)
+export const scanBarcodeAndTakeProduct = catchAsync(async (req, res) => {
+    const { productId, scannedCode } = req.body;
 
-    if (!productId) {
-        throw new AppError(400, 'Product ID is required');
+    if (!productId || !scannedCode) {
+        throw new AppError(400, 'Product ID and scanned code are required');
     }
 
-    const product = await Product.findOne({ _id: productId, status: 'Pending' });
+    const product = await Product.findOne({ _id: productId, status: 'Pending' }).select('uniqueCode name weight measurement transporterAmount');
     if (!product) {
         throw new AppError(404, 'Product not found or already taken');
     }
+
+    if (product.uniqueCode !== parseInt(scannedCode)) {
+        throw new AppError(400, 'Invalid barcode');
+    }
+
+    product.status = 'Assigned';
+    product.transporterId = req.user._id;
+    await product.save();
 
     const request = new Request({
         productId,
@@ -259,36 +267,8 @@ export const takeProduct = catchAsync(async (req, res) => {
     sendResponse(res, {
         statusCode: 200,
         success: true,
-        message: 'Request sent to hub manager',
-        data: request,
-    });
-});
-
-// Scan barcode (User acting as transporter)
-export const scanBarcode = catchAsync(async (req, res) => {
-    const { productId, scannedCode } = req.body;
-
-    if (!productId || !scannedCode) {
-        throw new AppError(400, 'Product ID and scanned code are required');
-    }
-
-    const product = await Product.findOne({ _id: productId, transporterId: req.user._id });
-    if (!product) {
-        throw new AppError(404, 'Product not found or not assigned to you');
-    }
-
-    if (product.uniqueCode !== parseInt(scannedCode)) {
-        throw new AppError(400, 'Invalid barcode');
-    }
-
-    product.status = 'In Transit';
-    await product.save();
-
-    sendResponse(res, {
-        statusCode: 200,
-        success: true,
         message: 'Barcode scanned successfully. Product is now in transit.',
-        data: { product },
+        data: { product, request },
     });
 });
 
@@ -300,7 +280,7 @@ export const submitProduct = catchAsync(async (req, res) => {
         throw new AppError(400, 'Product ID is required');
     }
 
-    const product = await Product.findOne({ _id: productId, transporterId: req.user._id });
+    const product = await Product.findOne({ _id: productId, transporterId: req.user._id }).select('uniqueCode name weight measurement transporterAmount');
     if (!product) {
         throw new AppError(404, 'Product not found or not assigned to you');
     }
@@ -316,7 +296,7 @@ export const submitProduct = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Submit request sent to hub manager',
-        data: request,
+        data: {product, request},
     });
 });
 

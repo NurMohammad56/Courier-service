@@ -3,8 +3,7 @@ import {
   createShipment,
   requestPrint,
   getPendingProducts,
-  takeProduct,
-  scanBarcode,
+  scanBarcodeAndTakeProduct,
   submitProduct,
   getProductsToReceive,
   receiveProduct,
@@ -25,9 +24,8 @@ router.use(restrictTo('user'));
 
 router.post('/create-shipment', createShipment);
 router.post('/request-print', requestPrint);
-router.post('/pending-products', getPendingProducts);
-router.post('/take-product', takeProduct);
-router.post('/scan-barcode', scanBarcode);
+router.get('/pending-products', getPendingProducts);
+router.post('/scan-barcode', scanBarcodeAndTakeProduct);
 router.post('/submit-product', submitProduct);
 router.get('/products-to-receive', getProductsToReceive);
 router.post('/receive-product', receiveProduct);

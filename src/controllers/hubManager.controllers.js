@@ -50,7 +50,7 @@ export const manageRequest = catchAsync(async (req, res) => {
     }
 
     const hubIdToCheck =
-        request.type === 'pickup' || request.type === 'print'
+        request.type === 'pickup' || request.type === 'print' || request.type === 'delivery'
             ? product.fromHubId._id
             : product.toHubId._id;
 
@@ -76,7 +76,11 @@ export const manageRequest = catchAsync(async (req, res) => {
 
             case 'scan':
                 product.status = 'On the way';
-                product.locations.push({ hubId: product.fromHubId });
+                product.locations.push({
+                    hubId: product.fromHubId,
+                    action: 'scanned', // Add required action
+                    timestamp: new Date(),
+                });
                 request.status = 'Approved';
 
                 const scanTransporter = await User.findById(request.userId);
@@ -88,9 +92,13 @@ export const manageRequest = catchAsync(async (req, res) => {
                 break;
 
             case 'delivery':
-                product.status = 'Reached';
-                product.locations.push({ hubId: product.toHubId });
                 request.status = 'Approved';
+                product.locations.push({
+                    hubId: product.toHubId,
+                    action: 'dispatched', 
+                    timestamp: new Date(),
+                });
+                product.status = 'Reached';
 
                 const deliveryTransporter = await User.findById(request.userId);
                 if (deliveryTransporter) {
@@ -102,11 +110,21 @@ export const manageRequest = catchAsync(async (req, res) => {
 
             case 'receive':
                 product.status = 'Pending Receipt Approval';
+                product.locations.push({
+                    hubId: product.toHubId,
+                    action: 'approve', // Add required action
+                    timestamp: new Date(),
+                });
                 request.status = 'Approved';
                 break;
 
             case 'receive-scan':
                 product.status = 'Received';
+                product.locations.push({
+                    hubId: product.toHubId,
+                    action: 'received-scan', // Add required action
+                    timestamp: new Date(),
+                });
                 request.status = 'Approved';
 
                 const receiver = await User.findById(request.userId);
@@ -128,7 +146,7 @@ export const manageRequest = catchAsync(async (req, res) => {
 
         if (request.type === 'print') {
             product.status = 'Canceled';
-            await product.save(); 
+            await product.save();
         }
     } else {
         throw new AppError(400, 'Invalid action');
@@ -157,8 +175,8 @@ export const manageRequest = catchAsync(async (req, res) => {
 const fetchRequests = async (req, types) => {
     const { page = 1, limit = 10, search = '', fromDate, toDate } = req.query;
 
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
+    const pageNum = Math.max(1, parseInt(page) || 1); // Ensure page is at least 1
+    const limitNum = Math.max(1, parseInt(limit) || 10); // Ensure limit is at least 1
     const skip = (pageNum - 1) * limitNum;
 
     let query = {
@@ -188,7 +206,7 @@ const fetchRequests = async (req, types) => {
     // Filter requests for the hub manager's hub
     let filteredRequests = requests.filter((request) => {
         const product = request.productId;
-        const hubIdToCheck = types.includes('pickup') || types.includes('print') ? product.fromHubId._id : product.toHubId._id;
+        const hubIdToCheck = types.includes('pickup') || types.includes('print') || types.includes('delivery') || types.includes('receive') ?product.fromHubId._id : product.toHubId._id;
         return hubIdToCheck.toString() === req.user.hubId.toString();
     });
 
@@ -247,8 +265,10 @@ export const getShipperRequests = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Shipper requests retrieved successfully',
-        data: requests,
-        pagination: { total, page, limit, totalPages },
+        data: {
+            requests,
+            pagination: { total, page, limit, totalPages }
+        },
     });
 });
 
@@ -260,8 +280,10 @@ export const getTransportRequests = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Transport requests retrieved successfully',
-        data: requests,
-        pagination: { total, page, limit, totalPages },
+        data: {
+            requests,
+            pagination: { total, page, limit, totalPages }
+        },
     });
 });
 
@@ -273,8 +295,10 @@ export const getSubmitProductRequests = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Submit product requests retrieved successfully',
-        data: requests,
-        pagination: { total, page, limit, totalPages },
+        data: {
+            requests,
+            pagination: { total, page, limit, totalPages }
+        },
     });
 });
 
@@ -286,7 +310,9 @@ export const getReceiverRequests = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Receiver requests retrieved successfully',
-        data: requests,
-        pagination: { total, page, limit, totalPages },
+        data: {
+            requests,
+            pagination: { total, page, limit, totalPages }
+        },
     });
 });
