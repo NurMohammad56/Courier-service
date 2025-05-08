@@ -27,10 +27,6 @@ const productSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
-    isAccepted: {
-        type: Boolean,
-        default: false
-    },
     fromHubId:
     {
         type: mongoose.Schema.Types.ObjectId,
@@ -63,6 +59,11 @@ const productSchema = new mongoose.Schema({
         default: 'Pending',
     },
     amount:
+    {
+        type: Number,
+        required: true
+    },
+    transporterAmount:
     {
         type: Number,
         required: true

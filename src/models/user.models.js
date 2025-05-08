@@ -41,7 +41,7 @@ const userSchema = new mongoose.Schema({
     hubId:
     {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Hub', required: function () { return this.role === 'hubManager'; }
+        ref: 'Hub',
     },
     isVerified:
     {

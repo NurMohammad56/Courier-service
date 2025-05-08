@@ -11,6 +11,7 @@ const requestSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User', required: true
     },
+    isAccepted: { type: Boolean, default: false },
     type:
     {
         type: String, enum: ['pickup', 'delivery', 'receive', 'print'],

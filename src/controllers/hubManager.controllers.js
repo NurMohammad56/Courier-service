@@ -27,6 +27,9 @@ export const getProfile = catchAsync(async (req, res) => {
 export const manageRequest = catchAsync(async (req, res) => {
     const { requestId, action } = req.body;
 
+    // Log incoming request for debugging
+    console.log('Incoming Request:', req.body);
+
     if (!requestId || !action) {
         throw new AppError(400, 'Request ID and action are required');
     }
@@ -41,51 +44,99 @@ export const manageRequest = catchAsync(async (req, res) => {
     }
 
     const product = request.productId;
+
+    if (!product || !product.fromHubId || !product.toHubId) {
+        throw new AppError(500, 'Product or hub information is missing');
+    }
+
     const hubIdToCheck =
-        request.type === 'pickup' || request.type === 'print'
+        request.type === 'pickup' || request.type === 'print' || request.type === 'delivery'
             ? product.fromHubId._id
             : product.toHubId._id;
+
+    if (!req.user?.hubId) {
+        throw new AppError(401, 'Hub ID not associated with authenticated user');
+    }
 
     if (req.user.hubId.toString() !== hubIdToCheck.toString()) {
         throw new AppError(403, 'You are not authorized to manage this request');
     }
 
     if (action === 'approve') {
-        if (request.type === 'print') {
-            request.status = 'Approved';
-        } else if (request.type === 'pickup') {
-            product.transporterId = request.userId;
-            product.status = 'Assigned';
-            request.status = 'Approved';
-        } else if (request.type === 'scan') {
-            product.status = 'On the way';
-            product.locations.push({ hubId: product.fromHubId });
-            request.status = 'Approved';
+        switch (request.type) {
+            case 'print':
+                request.status = 'Approved';
+                break;
 
-            const transporter = await User.findById(request.userId);
-            transporter.totalProductsTransported += 1;
-            transporter.totalAmountTransported += product.amount;
-            await transporter.save();
-        } else if (request.type === 'delivery') {
-            product.status = 'Reached';
-            product.locations.push({ hubId: product.toHubId });
-            request.status = 'Approved';
+            case 'pickup':
+                product.transporterId = request.userId;
+                product.status = 'Assigned';
+                request.status = 'Approved';
+                break;
 
-            const transporter = await User.findById(request.userId);
-            transporter.totalProductsTransported += 1;
-            transporter.totalAmountTransported += product.amount;
-            await transporter.save();
-        } else if (request.type === 'receive') {
-            product.status = 'Pending Receipt Approval';
-            request.status = 'Approved';
-        } else if (request.type === 'receive-scan') {
-            product.status = 'Received';
-            request.status = 'Approved';
+            case 'scan':
+                product.status = 'On the way';
+                product.locations.push({
+                    hubId: product.fromHubId,
+                    action: 'scanned', // Add required action
+                    timestamp: new Date(),
+                });
+                request.status = 'Approved';
 
-            const receiver = await User.findById(request.userId);
-            receiver.totalProductsReceived += 1;
-            receiver.totalAmountReceived += product.amount;
-            await receiver.save();
+                const scanTransporter = await User.findById(request.userId);
+                if (scanTransporter) {
+                    scanTransporter.totalProductsTransported += 1;
+                    scanTransporter.totalAmountTransported += product.amount;
+                    await scanTransporter.save();
+                }
+                break;
+
+            case 'delivery':
+                request.status = 'Approved';
+                product.locations.push({
+                    hubId: product.toHubId,
+                    action: 'dispatched', 
+                    timestamp: new Date(),
+                });
+                product.status = 'Reached';
+
+                const deliveryTransporter = await User.findById(request.userId);
+                if (deliveryTransporter) {
+                    deliveryTransporter.totalProductsTransported += 1;
+                    deliveryTransporter.totalAmountTransported += product.amount;
+                    await deliveryTransporter.save();
+                }
+                break;
+
+            case 'receive':
+                product.status = 'Pending Receipt Approval';
+                product.locations.push({
+                    hubId: product.toHubId,
+                    action: 'approve', // Add required action
+                    timestamp: new Date(),
+                });
+                request.status = 'Approved';
+                break;
+
+            case 'receive-scan':
+                product.status = 'Received';
+                product.locations.push({
+                    hubId: product.toHubId,
+                    action: 'received-scan', // Add required action
+                    timestamp: new Date(),
+                });
+                request.status = 'Approved';
+
+                const receiver = await User.findById(request.userId);
+                if (receiver) {
+                    receiver.totalProductsReceived += 1;
+                    receiver.totalAmountReceived += product.amount;
+                    await receiver.save();
+                }
+                break;
+
+            default:
+                throw new AppError(400, 'Invalid request type');
         }
 
         request.isAccepted = true;
@@ -101,8 +152,16 @@ export const manageRequest = catchAsync(async (req, res) => {
         throw new AppError(400, 'Invalid action');
     }
 
+    // Save changes
     await product.save();
     await request.save();
+
+    // Debug the final state
+    console.log('Final Saved Request:', {
+        id: request._id,
+        status: request.status,
+        isAccepted: request.isAccepted,
+    });
 
     sendResponse(res, {
         statusCode: 200,
@@ -116,8 +175,8 @@ export const manageRequest = catchAsync(async (req, res) => {
 const fetchRequests = async (req, types) => {
     const { page = 1, limit = 10, search = '', fromDate, toDate } = req.query;
 
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
+    const pageNum = Math.max(1, parseInt(page) || 1); // Ensure page is at least 1
+    const limitNum = Math.max(1, parseInt(limit) || 10); // Ensure limit is at least 1
     const skip = (pageNum - 1) * limitNum;
 
     let query = {
@@ -138,8 +197,8 @@ const fetchRequests = async (req, types) => {
             populate: [
                 { path: 'fromHubId' },
                 { path: 'toHubId' },
-                { path: 'shipperId', select: 'name' },
-                { path: 'receiverId', select: 'name' },
+                { path: 'shipperId', select: 'name email phone' },
+                { path: 'receiverId', select: 'name email phone' },
             ],
         })
         .populate('userId');
@@ -147,7 +206,7 @@ const fetchRequests = async (req, types) => {
     // Filter requests for the hub manager's hub
     let filteredRequests = requests.filter((request) => {
         const product = request.productId;
-        const hubIdToCheck = types.includes('pickup') || types.includes('print') ? product.fromHubId._id : product.toHubId._id;
+        const hubIdToCheck = types.includes('pickup') || types.includes('print') || types.includes('delivery') || types.includes('receive') ?product.fromHubId._id : product.toHubId._id;
         return hubIdToCheck.toString() === req.user.hubId.toString();
     });
 
@@ -169,10 +228,22 @@ const fetchRequests = async (req, types) => {
     const formattedRequests = paginatedRequests.map((request) => ({
         requestId: request._id,
         productCode: request.productId.uniqueCode,
-        shipperName: request.productId.shipperId.name,
-        receiverName: request.productId.receiverId.name,
+        productName: request.productId.name,
+        weight: request.productId.weight,
+        measurement: request.productId.measurement,
+        shipper: {
+            name: request.productId.shipperId.name,
+            email: request.productId.shipperId.email,
+            phone: request.productId.shipperId.phone,
+        },
+        receiver: {
+            name: request.productId.receiverId.name,
+            email: request.productId.receiverId.email,
+            phone: request.productId.receiverId.phone,
+        },
         fromHub: request.productId.fromHubId.name,
         toHub: request.productId.toHubId.name,
+        price: request.productId.amount,
         type: request.type,
         createdAt: request.createdAt,
     }));
@@ -194,8 +265,10 @@ export const getShipperRequests = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Shipper requests retrieved successfully',
-        data: requests,
-        pagination: { total, page, limit, totalPages },
+        data: {
+            requests,
+            pagination: { total, page, limit, totalPages }
+        },
     });
 });
 
@@ -207,8 +280,10 @@ export const getTransportRequests = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Transport requests retrieved successfully',
-        data: requests,
-        pagination: { total, page, limit, totalPages },
+        data: {
+            requests,
+            pagination: { total, page, limit, totalPages }
+        },
     });
 });
 
@@ -220,8 +295,10 @@ export const getSubmitProductRequests = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Submit product requests retrieved successfully',
-        data: requests,
-        pagination: { total, page, limit, totalPages },
+        data: {
+            requests,
+            pagination: { total, page, limit, totalPages }
+        },
     });
 });
 
@@ -233,7 +310,9 @@ export const getReceiverRequests = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Receiver requests retrieved successfully',
-        data: requests,
-        pagination: { total, page, limit, totalPages },
+        data: {
+            requests,
+            pagination: { total, page, limit, totalPages }
+        },
     });
 });
