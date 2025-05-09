@@ -8,6 +8,8 @@ import jwt from 'jsonwebtoken';
 export const registerStep1 = catchAsync(async (req, res) => {
     const { name, email, password, phone } = req.body;
 
+    console.log("Someone is registering", req.body);
+
     if (!name || !email || !password) {
         throw new AppError(400, 'All fields are required');
     }
@@ -27,7 +29,7 @@ export const registerStep1 = catchAsync(async (req, res) => {
 
     await user.save();
 
-    await sendVerificationCode(email, verificationCode);
+    //await sendVerificationCode(email, verificationCode);
 
     sendResponse(res, {
         statusCode: 200,
@@ -97,7 +99,7 @@ export const login = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Login successful',
-        data: { accessToken, refreshToken },
+        data: { accessToken, refreshToken, "userId": user._id},
     });
 });
 
