@@ -12,7 +12,7 @@ import {
   getProfile,
   changePassword,
 } from '../controllers/user.controllers.js';
-import { updateLocation, getLiveLocation, addLocationHistory} from '../controllers/location.controllers.js';
+import { updateLocation, getLiveLocation} from '../controllers/location.controllers.js';
 import { isAuthenticated, restrictTo } from '../middlewares/auth.middlewares.js';
 import upload from '../middlewares/multer.middlewares.js';
 
@@ -31,7 +31,6 @@ router.post('/scan-barcode-receipt', receiveAndScanProduct);
 router.get('/history', getHistory);
 router.patch('/update-location', updateLocation);
 router.get('/live-location/:productId', getLiveLocation);
-router.post('/add-location-history', addLocationHistory);
 router.get('/profile', getProfile);
 router.put('/edit-profile', upload.single('image'),editProfile);
 router.post('/change-password', changePassword);
