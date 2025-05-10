@@ -6,7 +6,6 @@ const userSchema = new mongoose.Schema({
     name:
     {
         type: String,
-        required: true
     },
     username: {
         type: String,
@@ -14,13 +13,11 @@ const userSchema = new mongoose.Schema({
     email:
     {
         type: String,
-        required: true,
         unique: true
     },
     phone:
     {
         type: String,
-        required: true,
     },
     image:
     {
@@ -141,11 +138,10 @@ userSchema.methods.generateTokens = function () {
 
 // Generate username automatically based on name and add a @ and 2 digit number
 userSchema.pre('save', function (next) {
-    if (this.isModified('name')) {
-        const username = this.name.toLowerCase().replace(/\s+/g, '');
-        this.username = '@' + username + Math.floor(Math.random() * 100);
-    }
+    if (!this.isNew) return next(); // শুধুমাত্র নতুন ডকুমেন্টের জন্য
+
+    const username = this.name.toLowerCase().replace(/\s+/g, '');
+    this.username = '@' + username + Math.floor(Math.random() * 100);
     next();
 });
-
 export const User = mongoose.model('User', userSchema);
