@@ -4,6 +4,7 @@ import { sendResponse } from '../utilty/helper.utilty.js';
 import { Request } from '../models/request.models.js';
 import { User } from '../models/user.models.js';
 import { Product } from '../models/product.models.js';
+import { Transporter } from '../models/transporter.models.js';
 
 // Get hub manager profile (name and assigned hub)
 export const getProfile = catchAsync(async (req, res) => {
@@ -72,16 +73,31 @@ export const manageRequest = catchAsync(async (req, res) => {
                 product.transporterId = request.userId;
                 product.status = 'Assigned';
                 request.status = 'Approved';
+                await Transporter.findOneAndUpdate({
+                    productId: product._id
+                },
+                    {
+                        status: 'on the way'
+                    }
+                )
                 break;
 
             case 'scan':
                 product.status = 'On the way';
                 product.locations.push({
                     hubId: product.fromHubId,
-                    action: 'scanned', 
+                    action: 'scanned',
                     timestamp: new Date(),
                 });
                 request.status = 'Approved';
+
+                await Transporter.findOneAndUpdate({
+                    productId: product._id
+                },
+                    {
+                        status: 'on the way'
+                    }
+                )
 
                 const scanTransporter = await User.findById(request.userId);
                 if (scanTransporter) {
@@ -95,10 +111,18 @@ export const manageRequest = catchAsync(async (req, res) => {
                 request.status = 'Approved';
                 product.locations.push({
                     hubId: product.toHubId,
-                    action: 'dispatched', 
+                    action: 'dispatched',
                     timestamp: new Date(),
                 });
                 product.status = 'Reached';
+
+                await Transporter.findOneAndUpdate({
+                    productId: product._id
+                },
+                    {
+                        status: 'completed'
+                    }
+                )
 
                 const deliveryTransporter = await User.findById(request.userId);
                 if (deliveryTransporter) {
@@ -112,7 +136,7 @@ export const manageRequest = catchAsync(async (req, res) => {
                 product.status = 'Received';
                 product.locations.push({
                     hubId: product.toHubId,
-                    action: 'received', 
+                    action: 'received',
                     timestamp: new Date(),
                 });
                 request.status = 'Approved';
@@ -189,9 +213,12 @@ const fetchRequests = async (req, types) => {
     // Filter requests for the hub manager's hub
     let filteredRequests = requests.filter((request) => {
         const product = request.productId;
-        const hubIdToCheck = types.includes('pickup') || types.includes('print') || types.includes('delivery') || types.includes('receive') ?product.fromHubId._id : product.toHubId._id;
+        console.log(request);
+        const hubIdToCheck = types.includes('pickup') || types.includes('print') || types.includes('delivery') || types.includes('receive') ? product.fromHubId._id : product.toHubId._id;
         return hubIdToCheck.toString() === req.user.hubId.toString();
+
     });
+    
 
     // Search filter (product code, shipper name, receiver name)
     if (search) {

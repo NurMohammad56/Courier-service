@@ -4,22 +4,19 @@ import { sendResponse } from '../utilty/helper.utilty.js';
 import { Hub } from '../models/hubs.models.js';
 import { User } from '../models/user.models.js';
 import { Product } from '../models/product.models.js';
+import { Transporter } from '../models/transporter.models.js';
 
 // Get dashboard overview
 export const getDashboardOverview = catchAsync(async (req, res) => {
     const totalHubs = await Hub.countDocuments();
-    const totalHubManagers = await User.countDocuments({ role: 'hubManager' });
-    const totalUsers = await User.countDocuments({ role: 'user' });
+    const deliverdProducts = await Product.countDocuments({ status: 'Received' });
     const totalProducts = await Product.countDocuments();
-    const totalAmount = (await Product.aggregate([
-        { $group: { _id: null, total: { $sum: '$amount' } } },
-    ]))[0]?.total || 0;
 
     sendResponse(res, {
         statusCode: 200,
         success: true,
         message: 'Dashboard overview retrieved successfully',
-        data: { totalHubs, totalHubManagers, totalUsers, totalProducts, totalAmount },
+        data: { totalHubs, deliverdProducts, totalProducts },
     });
 });
 
@@ -55,28 +52,6 @@ const fetchUsers = async (req, role) => {
         totalPages: Math.ceil(total / limitNum),
     };
 };
-
-// Get transporter list
-export const getTransporters = catchAsync(async (req, res) => {
-    const { users, total, page, limit, totalPages } = await fetchUsers(req, 'transporter');
-
-    const formattedUsers = users.map((user) => ({
-        name: user.name,
-        departureHub: user.departureHub ? user.departureHub.name : null,
-        arrivalHub: user.arrivalHub ? user.arrivalHub.name : null,
-        email: user.email,
-        phone: user.phone,
-        location: user.location || 'N/A',
-    }));
-
-    sendResponse(res, {
-        statusCode: 200,
-        success: true,
-        message: 'Transporter list retrieved successfully',
-        data: formattedUsers,
-        pagination: { total, page, limit, totalPages },
-    });
-});
 
 // Get hub manager list
 export const getHubManagers = catchAsync(async (req, res) => {
@@ -201,5 +176,54 @@ export const deleteUser = catchAsync(async (req, res) => {
         success: true,
         message: 'User deleted successfully',
         data: null,
+    });
+});
+
+// Get all Transporter
+export const getAllTransporters = catchAsync(async (req, res) => {
+    const { page = 1, limit = 10, search = '' } = req.query;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    let query = { status: 'on the way' };
+    if (search) {
+        query.$or = [
+            { name: { $regex: search, $options: 'i' } },
+            { email: { $regex: search, $options: 'i' } },
+            { phone: { $regex: search, $options: 'i' } },
+        ];
+    }
+
+    const transporters = await Transporter.find(query)
+        .populate('transporterId fromHubId toHubId', 'name email phone')
+        .skip(skip)
+        .limit(limitNum);
+
+    const total = await Transporter.countDocuments(query);
+
+    const formattedTransporters = transporters.map((transporter) => ({
+        id: transporter?.transporterId?._id,
+        name: transporter?.transporterId?.name,
+        email: transporter?.transporterId?.email,
+        phone: transporter?.transporterId?.phone,
+        fromHub: transporter?.fromHubId?.name,
+        toHub: transporter?.toHubId?.name,
+        status: transporter.status,
+    }));
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: 'Transporter list retrieved successfully',
+        data: {
+            formattedTransporters,
+            pagination: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(total / limitNum),
+            }
+        },
     });
 });
