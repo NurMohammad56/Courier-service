@@ -6,8 +6,7 @@ import {
   scanBarcodeAndTakeProduct,
   submitProduct,
   getProductsToReceive,
-  receiveProduct,
-  scanBarcodeForReceipt,
+  receiveAndScanProduct,
   getHistory,
   getProductLocation,
   editProfile,
@@ -28,8 +27,7 @@ router.get('/pending-products', getPendingProducts);
 router.post('/scan-barcode', scanBarcodeAndTakeProduct);
 router.post('/submit-product', submitProduct);
 router.get('/products-to-receive', getProductsToReceive);
-router.post('/receive-product', receiveProduct);
-router.post('/scan-barcode-receipt', scanBarcodeForReceipt);
+router.post('/scan-barcode-receipt', receiveAndScanProduct);
 router.get('/history', getHistory);
 router.get('/location/:productId', getProductLocation);
 router.put('/update-location', updateLocation);

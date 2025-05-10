@@ -33,7 +33,7 @@ export const createShipment = catchAsync(async (req, res) => {
     const uniqueCode = await generateUniqueCode();
     const distance = calculateDistance(fromHub.coordinates, toHub.coordinates);
     const amount = calculateAmount(weight, distance);
-    const transporterAmount = parseFloat(amount * 0.3); 
+    const transporterAmount = parseFloat(amount * 0.3);
 
     const product = new Product({
         uniqueCode,
@@ -46,7 +46,7 @@ export const createShipment = catchAsync(async (req, res) => {
         shipperId: req.user._id,
         receiverId,
         amount,
-        transporterAmount, 
+        transporterAmount,
     });
 
     await product.save();
@@ -296,7 +296,7 @@ export const submitProduct = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Submit request sent to hub manager',
-        data: {product, request},
+        data: { product, request },
     });
 });
 
@@ -305,7 +305,11 @@ export const getProductsToReceive = catchAsync(async (req, res) => {
     const reachedProducts = await Product.find({
         receiverId: req.user._id,
         status: 'Reached',
-    }).populate('fromHubId toHubId shipperId');
+    })
+        .populate({ path: 'fromHubId', select: 'name' })
+        .populate({ path: 'toHubId', select: 'name' })
+        .populate({ path: 'shipperId', select: 'name' })
+        .populate({ path: 'receiverId', select: 'name' });
 
     sendResponse(res, {
         statusCode: 200,
@@ -315,59 +319,49 @@ export const getProductsToReceive = catchAsync(async (req, res) => {
     });
 });
 
-// Request to receive a product (User acting as receiver)
-export const receiveProduct = catchAsync(async (req, res) => {
-    const { productId } = req.body;
-
-    if (!productId) {
-        throw new AppError(400, 'Product ID is required');
-    }
-
-    const product = await Product.findOne({ _id: productId, receiverId: req.user._id, status: 'Reached' });
-    if (!product) {
-        throw new AppError(404, 'Product not found or not ready to receive');
-    }
-
-    const request = new Request({
-        productId,
-        userId: req.user._id,
-        type: 'receive',
-    });
-    await request.save();
-
-    sendResponse(res, {
-        statusCode: 200,
-        success: true,
-        message: 'Receive request sent to hub manager',
-        data: request,
-    });
-});
-
-// Scan barcode to confirm receipt (User acting as receiver)
-export const scanBarcodeForReceipt = catchAsync(async (req, res) => {
+// Combined receive and scan controller
+export const receiveAndScanProduct = catchAsync(async (req, res) => {
     const { productId, scannedCode } = req.body;
 
+    // Validate input
     if (!productId || !scannedCode) {
         throw new AppError(400, 'Product ID and scanned code are required');
     }
 
-    const product = await Product.findOne({ _id: productId, receiverId: req.user._id });
+    // Find the product
+    const product = await Product.findOne({
+        _id: productId,
+        receiverId: req.user._id,
+        status: 'Reached' 
+    });
+
     if (!product) {
-        throw new AppError(404, 'Product not found or not assigned to you');
+        throw new AppError(404, 'Product not found or not ready to receive');
     }
 
+    // Verify barcode
     if (product.uniqueCode !== parseInt(scannedCode)) {
         throw new AppError(400, 'Invalid barcode');
     }
 
-    product.status = 'Received';
+    // Create a receive-scan request for hub manager approval
+    const request = new Request({
+        productId,
+        userId: req.user._id,
+        type: 'receive',
+        status: 'Pending Approval'
+    });
+    await request.save();
+
+    // Update product status to indicate waiting for approval
+    product.status = 'Pending Receipt Approval';
     await product.save();
 
     sendResponse(res, {
         statusCode: 200,
         success: true,
-        message: 'Barcode scanned successfully. Product marked as received.',
-        data: { product },
+        message: 'Product scanned successfully. Waiting for hub manager approval.',
+        data: { product, request }
     });
 });
 
