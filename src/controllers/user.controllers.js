@@ -367,40 +367,15 @@ export const receiveAndScanProduct = catchAsync(async (req, res) => {
 
 // Get user history (Shipper, Transporter, Receiver history)
 export const getHistory = catchAsync(async (req, res) => {
-    const shipped = await Product.find({ shipperId: req.user._id }).populate('fromHubId toHubId');
-    const transported = await Product.find({ transporterId: req.user._id }).populate('fromHubId toHubId');
-    const received = await Product.find({ receiverId: req.user._id }).populate('fromHubId toHubId');
+    const shipped = await Product.find({ shipperId: req.user._id }).populate('fromHubId toHubId', 'name')
+    const transported = await Product.find({ transporterId: req.user._id }).populate('fromHubId toHubId', 'name');
+    const received = await Product.find({ receiverId: req.user._id }).populate('fromHubId toHubId', 'name');
 
     sendResponse(res, {
         statusCode: 200,
         success: true,
         message: 'User history retrieved successfully',
         data: { shipped, transported, received },
-    });
-});
-
-// Get live location of a product
-export const getProductLocation = catchAsync(async (req, res) => {
-    const { productId } = req.params;
-
-    const product = await Product.findOne({
-        _id: productId,
-        $or: [
-            { shipperId: req.user._id },
-            { transporterId: req.user._id },
-            { receiverId: req.user._id },
-        ],
-    }).populate('fromHubId toHubId locations.hubId');
-
-    if (!product) {
-        throw new AppError(404, 'Product not found or access denied');
-    }
-
-    sendResponse(res, {
-        statusCode: 200,
-        success: true,
-        message: 'Product location retrieved successfully',
-        data: { product, locations: product.locations },
     });
 });
 
@@ -417,34 +392,30 @@ export const getProfile = catchAsync(async (req, res) => {
 
 // Edit Profile
 export const editProfile = catchAsync(async (req, res) => {
-    const { name, email } = req.body;
+    const { name } = req.body; 
 
-    if (!name || !email) {
-        throw new AppError(400, 'Name and email are required');
-    }
+    const updateData = {};
+    
+    if (name) updateData.name = name; 
 
     if (req.file) {
         try {
             const image = await uploadOnCloudinary(req.file.buffer, 'users');
-            req.body.image = image.secure_url;
+            updateData.image = image.secure_url;
         } catch (error) {
             throw new AppError(500, 'Error uploading image');
         }
     }
 
-    const user = await User.findById(req.user._id);
-    if (await User.findOne({ email, _id: { $ne: req.user._id } })) {
-        throw new AppError(400, 'Email already in use');
+    const user = await User.findByIdAndUpdate(
+        req.user._id,
+        updateData,
+        { new: true, runValidators: true }
+    ).select('name username image');
+
+    if (!user) {
+        throw new AppError(404, 'User not found');
     }
-
-    user.name = name;
-    user.email = email;
-
-    if (req.body.image) {
-        user.image = req.body.image;
-    }
-
-    await user.save();
 
     sendResponse(res, {
         statusCode: 200,
