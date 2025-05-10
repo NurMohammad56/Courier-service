@@ -50,7 +50,7 @@ export const manageRequest = catchAsync(async (req, res) => {
     }
 
     const hubIdToCheck =
-        request.type === 'pickup' || request.type === 'print' || request.type === 'delivery'
+        request.type === 'pickup' || request.type === 'print' || request.type === 'delivery' || request.type === 'receive'
             ? product.fromHubId._id
             : product.toHubId._id;
 
@@ -78,7 +78,7 @@ export const manageRequest = catchAsync(async (req, res) => {
                 product.status = 'On the way';
                 product.locations.push({
                     hubId: product.fromHubId,
-                    action: 'scanned', // Add required action
+                    action: 'scanned', 
                     timestamp: new Date(),
                 });
                 request.status = 'Approved';
@@ -109,20 +109,10 @@ export const manageRequest = catchAsync(async (req, res) => {
                 break;
 
             case 'receive':
-                product.status = 'Pending Receipt Approval';
-                product.locations.push({
-                    hubId: product.toHubId,
-                    action: 'approve', // Add required action
-                    timestamp: new Date(),
-                });
-                request.status = 'Approved';
-                break;
-
-            case 'receive-scan':
                 product.status = 'Received';
                 product.locations.push({
                     hubId: product.toHubId,
-                    action: 'received-scan', // Add required action
+                    action: 'received', 
                     timestamp: new Date(),
                 });
                 request.status = 'Approved';
@@ -155,13 +145,6 @@ export const manageRequest = catchAsync(async (req, res) => {
     // Save changes
     await product.save();
     await request.save();
-
-    // Debug the final state
-    console.log('Final Saved Request:', {
-        id: request._id,
-        status: request.status,
-        isAccepted: request.isAccepted,
-    });
 
     sendResponse(res, {
         statusCode: 200,
