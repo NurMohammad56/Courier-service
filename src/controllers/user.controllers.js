@@ -6,6 +6,7 @@ import { User } from '../models/user.models.js';
 import { Product } from '../models/product.models.js';
 import { Request } from '../models/request.models.js';
 import mongoose from 'mongoose';
+import { Transporter } from '../models/transporter.models.js';
 
 // Create a new shipment (User acting as shipper)
 export const createShipment = catchAsync(async (req, res) => {
@@ -244,7 +245,7 @@ export const scanBarcodeAndTakeProduct = catchAsync(async (req, res) => {
         throw new AppError(400, 'Product ID and scanned code are required');
     }
 
-    const product = await Product.findOne({ _id: productId, status: 'Pending' }).select('uniqueCode name weight measurement transporterAmount');
+    const product = await Product.findOne({ _id: productId, status: 'Pending' }).select('uniqueCode name weight toHubId fromHubId measurement transporterAmount');
     if (!product) {
         throw new AppError(404, 'Product not found or already taken');
     }
@@ -263,6 +264,17 @@ export const scanBarcodeAndTakeProduct = catchAsync(async (req, res) => {
         type: 'pickup',
     });
     await request.save();
+
+    console.log(request);
+    console.log(product);
+
+    await Transporter.create({
+        productId: product._id,
+        transporterId: req.user._id,
+        fromHubId: product.fromHubId,
+        toHubId: product.toHubId,
+        status: 'pending'
+    })
 
     sendResponse(res, {
         statusCode: 200,
@@ -291,6 +303,14 @@ export const submitProduct = catchAsync(async (req, res) => {
         type: 'delivery',
     });
     await request.save();
+
+    await Transporter.create({
+        productId: product._id,
+        transporterId: req.user._id,
+        fromHub: product.fromHubId,
+        toHub: product.toHubId,
+        status: 'pending'
+    })
 
     sendResponse(res, {
         statusCode: 200,
@@ -332,7 +352,7 @@ export const receiveAndScanProduct = catchAsync(async (req, res) => {
     const product = await Product.findOne({
         _id: productId,
         receiverId: req.user._id,
-        status: 'Reached' 
+        status: 'Reached'
     });
 
     if (!product) {
@@ -392,11 +412,11 @@ export const getProfile = catchAsync(async (req, res) => {
 
 // Edit Profile
 export const editProfile = catchAsync(async (req, res) => {
-    const { name } = req.body; 
+    const { name } = req.body;
 
     const updateData = {};
-    
-    if (name) updateData.name = name; 
+
+    if (name) updateData.name = name;
 
     if (req.file) {
         try {
