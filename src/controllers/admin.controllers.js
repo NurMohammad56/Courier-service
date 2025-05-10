@@ -268,3 +268,64 @@ export const getAllTransporters = catchAsync(async (req, res) => {
         },
     });
 });
+
+// Total delivered products for a hub
+export const getTopReciverHubCount = catchAsync(async (req, res) => {
+    const { year, month } = req.query;
+
+    // Validate input
+    if (!year || !month || isNaN(year) || isNaN(month)) {
+        throw new AppError(400, 'Valid year and month are required');
+    }
+
+    const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+    const endDate = new Date(parseInt(year), parseInt(month), 0);
+
+    // Get all hubs and their delivered product counts for the month
+    const hubStats = await Product.aggregate([
+        {
+            $match: {
+                status: 'Received',
+                'locations.timestamp': {
+                    $gte: startDate,
+                    $lte: endDate
+                }
+            }
+        },
+        {
+            $group: {
+                _id: '$toHubId',
+                count: { $sum: 1 }
+            }
+        },
+        {
+            $lookup: {
+                from: 'hubs',
+                localField: '_id',
+                foreignField: '_id',
+                as: 'hubDetails'
+            }
+        },
+        {
+            $unwind: '$hubDetails'
+        },
+        {
+            $project: {
+                hubId: '$_id',
+                hubName: '$hubDetails.name',
+                deliveredCount: '$count',
+                _id: 0
+            }
+        },
+        {
+            $sort: { deliveredCount: -1 }
+        }
+    ]);
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: `Hub delivery counts for ${month}/${year} retrieved successfully`,
+        data: hubStats
+    });
+});
