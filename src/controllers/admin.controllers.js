@@ -70,8 +70,10 @@ export const getHubManagers = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Hub manager list retrieved successfully',
-        data: formattedUsers,
-        pagination: { total, page, limit, totalPages },
+        data: {
+            formattedUsers,
+            pagination: { total, page, limit, totalPages }
+        },
     });
 });
 
@@ -107,26 +109,28 @@ export const getHubs = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Hub list retrieved successfully',
-        data: formattedHubs,
-        pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+        data: {
+            formattedHubs,
+            pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
+        },
     });
 });
 
 // Add new hub manager
 export const addHubManager = catchAsync(async (req, res) => {
-    const { username, email, phone, password, confirmPassword, hubId } = req.body;
+    const { name, email, phone, password, confirmPassword, hubId } = req.body;
 
     if (password !== confirmPassword) {
         throw new AppError(400, 'Passwords do not match');
     }
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email }).select('name email phone role hubId')
     if (existingUser) {
         throw new AppError(400, 'Email already in use');
     }
 
     const newUser = await User.create({
-        name: username,
+        name,
         email,
         phone,
         password,
@@ -158,6 +162,43 @@ export const addHub = catchAsync(async (req, res) => {
         success: true,
         message: 'Hub added successfully',
         data: newHub,
+    });
+});
+
+// Edit hub manager
+export const editHubManager = catchAsync(async (req, res) => {
+    const { userId } = req.params;
+    const { name, email, phone, password, confirmPassword, hubId } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+        throw new AppError(404, 'User not found');
+    }
+
+    if (password && password !== confirmPassword) {
+        throw new AppError(400, 'Passwords do not match');
+    }
+
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (email) {
+        const existingUser = await User.findOne({ email }).select('name email phone role hubId');
+        if (existingUser && existingUser._id.toString() !== userId) {
+            throw new AppError(400, 'Email already in use');
+        }
+        updateData.email = email;
+    }
+    if (phone) updateData.phone = phone;
+    if (password) updateData.password = password;
+    if (hubId) updateData.hubId = hubId;
+
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, { new: true });
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: 'Hub manager updated successfully',
+        data: updatedUser,
     });
 });
 
