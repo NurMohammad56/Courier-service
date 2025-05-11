@@ -271,17 +271,19 @@ export const getAllTransporters = catchAsync(async (req, res) => {
 
 // Total delivered products for a hub
 export const getTopReciverHubCount = catchAsync(async (req, res) => {
-    const { year, month } = req.query;
+    const { month } = req.query;
 
-    // Validate input
-    if (!year || !month || isNaN(year) || isNaN(month)) {
-        throw new AppError(400, 'Valid year and month are required');
+    if (!month || !/^\d{2}-\d{4}$/.test(month)) {
+        throw new AppError(400, 'Valid month format required (MM-YYYY)');
     }
 
-    const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
-    const endDate = new Date(parseInt(year), parseInt(month), 0);
+    const [monthStr, yearStr] = month.split('-');
+    const monthInt = parseInt(monthStr, 10) - 1;
+    const yearInt = parseInt(yearStr, 10);
 
-    // Get all hubs and their delivered product counts for the month
+    const startDate = new Date(yearInt, monthInt, 1);
+    const endDate = new Date(yearInt, monthInt + 1, 0, 23, 59, 59, 999);
+
     const hubStats = await Product.aggregate([
         {
             $match: {
@@ -325,7 +327,158 @@ export const getTopReciverHubCount = catchAsync(async (req, res) => {
     sendResponse(res, {
         statusCode: 200,
         success: true,
-        message: `Hub delivery counts for ${month}/${year} retrieved successfully`,
+        message: `Hub delivery counts for ${month} retrieved successfully`,
         data: hubStats
     });
 });
+
+// Geet top sender and receiver hub
+export const getTopHubStats = catchAsync(async (req, res) => {
+    const { month } = req.query;
+
+    if (!month || !/^\d{2}-\d{4}$/.test(month)) {
+        throw new AppError(400, 'Month is required in MM-YYYY format');
+    }
+
+    const [monthStr, yearStr] = month.split('-');
+    const monthInt = parseInt(monthStr, 10) - 1;
+    const yearInt = parseInt(yearStr, 10);
+
+    const startDate = new Date(yearInt, monthInt, 1);
+    const endDate = new Date(yearInt, monthInt + 1, 0, 23, 59, 59, 999);
+
+    // Common match condition
+    const matchStage = {
+        status: 'Received',
+        'locations.timestamp': { $gte: startDate, $lte: endDate }
+    };
+
+    // Receiver aggregation
+    const topReceivers = await Product.aggregate([
+        { $match: matchStage },
+        {
+            $group: {
+                _id: '$toHubId',
+                totalReceived: { $sum: 1 }
+            }
+        },
+        {
+            $lookup: {
+                from: 'hubs',
+                localField: '_id',
+                foreignField: '_id',
+                as: 'hub'
+            }
+        },
+        { $unwind: '$hub' },
+        {
+            $project: {
+                hubId: '$_id',
+                hubName: '$hub.name',
+                totalProduct: '$totalReceived',
+                _id: 0
+            }
+        },
+        { $sort: { totalProduct: -1 } },
+        { $limit: 5 }
+    ]);
+
+    // Sender aggregation
+    const topSenders = await Product.aggregate([
+        { $match: matchStage },
+        {
+            $group: {
+                _id: '$fromHubId',
+                totalSent: { $sum: 1 }
+            }
+        },
+        {
+            $lookup: {
+                from: 'hubs',
+                localField: '_id',
+                foreignField: '_id',
+                as: 'hub'
+            }
+        },
+        { $unwind: '$hub' },
+        {
+            $project: {
+                hubId: '$_id',
+                hubName: '$hub.name',
+                totalProduct: '$totalSent',
+                _id: 0
+            }
+        },
+        { $sort: { totalProduct: -1 } },
+        { $limit: 5 }
+    ]);
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: `Top receiver and sender hubs for ${month} retrieved successfully`,
+        data: {
+            topReceivers,
+            topSenders
+        }
+    });
+});
+
+// Get mothly delivery count for a hub
+export const getMonthlyDeliveredProducts = catchAsync(async (req, res) => {
+
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const startOfYear = new Date(`${year}-01-01T00:00:00.000Z`);
+    const endOfYear = new Date(`${year}-12-31T23:59:59.999Z`);
+
+    const monthlyData = await Product.aggregate([
+        {
+            $match: {
+                status: 'Received',
+                createdAt: {
+                    $gte: startOfYear,
+                    $lte: endOfYear
+                }
+            }
+        },
+        {
+            $group: {
+                _id: { $month: '$createdAt' },
+                totalDelivered: { $sum: 1 }
+            }
+        },
+        {
+            $project: {
+                month: '$_id',
+                totalDelivered: 1,
+                _id: 0
+            }
+        },
+        {
+            $sort: { month: 1 }
+        }
+    ]);
+
+    const monthNames = [
+        'Jan', 'Feb', 'Mar', 'April', 'May', 'June',
+        'July', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+
+    const fullMonthlyData = monthNames.map((name, index) => {
+        const monthData = monthlyData.find(item => item.month === index + 1);
+        return {
+            month: name,
+            totalDelivered: monthData ? monthData.totalDelivered : 0
+        };
+    });
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: `Monthly delivered products for ${year} retrieved successfully`,
+        data: fullMonthlyData
+    });
+});
+
+
+
