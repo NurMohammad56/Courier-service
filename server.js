@@ -33,6 +33,14 @@ app.use(cors({
 io.on('connection', (socket) => {
     console.log('A client connected:', socket.id);
 
+    // Join user-specific room for notifications
+    socket.on('joinUserRoom', (userId) => {
+        if (userId) {
+            socket.join(`user_${userId}`);
+            console.log(`Client ${socket.id} joined user room: ${userId}`);
+        }
+    });
+
     // Join specific product room for location updates
     socket.on('joinProductRoom', async (productId) => {
         try {
