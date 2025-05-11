@@ -424,3 +424,61 @@ export const getTopHubStats = catchAsync(async (req, res) => {
     });
 });
 
+// Get mothly delivery count for a hub
+export const getMonthlyDeliveredProducts = catchAsync(async (req, res) => {
+
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const startOfYear = new Date(`${year}-01-01T00:00:00.000Z`);
+    const endOfYear = new Date(`${year}-12-31T23:59:59.999Z`);
+
+    const monthlyData = await Product.aggregate([
+        {
+            $match: {
+                status: 'Received',
+                createdAt: {
+                    $gte: startOfYear,
+                    $lte: endOfYear
+                }
+            }
+        },
+        {
+            $group: {
+                _id: { $month: '$createdAt' },
+                totalDelivered: { $sum: 1 }
+            }
+        },
+        {
+            $project: {
+                month: '$_id',
+                totalDelivered: 1,
+                _id: 0
+            }
+        },
+        {
+            $sort: { month: 1 }
+        }
+    ]);
+
+    const monthNames = [
+        'Jan', 'Feb', 'Mar', 'April', 'May', 'June',
+        'July', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+
+    const fullMonthlyData = monthNames.map((name, index) => {
+        const monthData = monthlyData.find(item => item.month === index + 1);
+        return {
+            month: name,
+            totalDelivered: monthData ? monthData.totalDelivered : 0
+        };
+    });
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: `Monthly delivered products for ${year} retrieved successfully`,
+        data: fullMonthlyData
+    });
+});
+
+
+
