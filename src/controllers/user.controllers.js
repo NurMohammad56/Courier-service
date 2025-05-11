@@ -409,7 +409,7 @@ export const receiveAndScanProduct = catchAsync(async (req, res) => {
     });
     await request.save();
 
-    // Notify shipper
+        // Notify shipper
     await createNotification(
         product.shipperId,
         `Your product ${product.uniqueCode} is being delivered to the receiver`,
