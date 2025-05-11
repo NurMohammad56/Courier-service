@@ -1,6 +1,6 @@
 import catchAsync from '../utilty/catchAsync.js';
 import AppError from '../errors/AppError.js';
-import { sendResponse, generateUniqueCode, calculateDistance, calculateAmount, uploadOnCloudinary } from '../utilty/helper.utilty.js';
+import { sendResponse, generateUniqueCode, calculateDistance, calculateAmount, uploadOnCloudinary, createNotification } from '../utilty/helper.utilty.js';
 import { Hub } from '../models/hubs.models.js';
 import { User } from '../models/user.models.js';
 import { Product } from '../models/product.models.js';
@@ -51,6 +51,15 @@ export const createShipment = catchAsync(async (req, res) => {
     });
 
     await product.save();
+
+    // Notify receiver
+    await createNotification(
+        receiverId,
+        `New shipment created for you (${product.uniqueCode})`,
+        'shipment',
+        product._id,
+        'Product'
+    );
 
     const shipper = await User.findById(req.user._id);
     shipper.totalProductsShipped += 1;
@@ -258,6 +267,24 @@ export const scanBarcodeAndTakeProduct = catchAsync(async (req, res) => {
     product.transporterId = req.user._id;
     await product.save();
 
+    // Notify shipper
+    await createNotification(
+        product.shipperId,
+        `Your product ${product.uniqueCode} has been picked up by a transporter`,
+        'shipment',
+        product._id,
+        'Product'
+    );
+
+    // Notify receiver
+    await createNotification(
+        product.receiverId,
+        `Your product ${product.uniqueCode} is on the way`,
+        'shipment',
+        product._id,
+        'Product'
+    );
+
     const request = new Request({
         productId,
         userId: req.user._id,
@@ -303,6 +330,15 @@ export const submitProduct = catchAsync(async (req, res) => {
         type: 'delivery',
     });
     await request.save();
+
+    // Notify receiver
+    await createNotification(
+        product.receiverId,
+        `Your product ${product.uniqueCode} has reached the destination hub`,
+        'shipment',
+        product._id,
+        'Product'
+    );
 
     await Transporter.create({
         productId: product._id,
@@ -372,6 +408,15 @@ export const receiveAndScanProduct = catchAsync(async (req, res) => {
         status: 'Pending Approval'
     });
     await request.save();
+
+    // Notify shipper
+    await createNotification(
+        product.shipperId,
+        `Your product ${product.uniqueCode} is being delivered to the receiver`,
+        'shipment',
+        product._id,
+        'Product'
+    );
 
     // Update product status to indicate waiting for approval
     product.status = 'Pending Receipt Approval';

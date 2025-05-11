@@ -1,6 +1,6 @@
 import catchAsync from '../utilty/catchAsync.js';
 import AppError from '../errors/AppError.js';
-import { sendResponse } from '../utilty/helper.utilty.js';
+import { createNotification, sendResponse } from '../utilty/helper.utilty.js';
 import { Request } from '../models/request.models.js';
 import { User } from '../models/user.models.js';
 import { Product } from '../models/product.models.js';
@@ -154,6 +154,14 @@ export const manageRequest = catchAsync(async (req, res) => {
         }
 
         request.isAccepted = true;
+        // Notify requester
+        await createNotification(
+            request.userId,
+            `Your ${request.type} request for product ${product.uniqueCode} has been approved`,
+            'request',
+            product._id,
+            'Product'
+        );
     } else if (action === 'reject') {
         request.status = 'Rejected';
         request.isAccepted = false;
@@ -162,6 +170,15 @@ export const manageRequest = catchAsync(async (req, res) => {
             product.status = 'Canceled';
             await product.save();
         }
+
+        // Notify requester
+        await createNotification(
+            request.userId,
+            `Your ${request.type} request for product ${product.uniqueCode} has been rejected`,
+            'request',
+            product._id,
+            'Product'
+        );
     } else {
         throw new AppError(400, 'Invalid action');
     }
@@ -218,7 +235,7 @@ const fetchRequests = async (req, types) => {
         return hubIdToCheck.toString() === req.user.hubId.toString();
 
     });
-    
+
 
     // Search filter (product code, shipper name, receiver name)
     if (search) {
