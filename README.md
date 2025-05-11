@@ -20,11 +20,12 @@ A complete backend system for managing product delivery logistics between hubs. 
 
 ## Installation
 
-----bash----
+```bash
 git clone https://github.com/FSDTeam-SAA/backend_igghy.git
 cd backend_igghy
 code .
 npm install
+```
 
 ## Run the project
 npm start 
