@@ -174,7 +174,7 @@ export const verifyResetCode = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Reset code verified successfully',
-        data: null,
+        data: userId,
     });
 });
 
