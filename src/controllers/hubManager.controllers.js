@@ -1,9 +1,10 @@
 import catchAsync from '../utilty/catchAsync.js';
 import AppError from '../errors/AppError.js';
-import { sendResponse } from '../utilty/helper.utilty.js';
+import { createNotification, sendResponse } from '../utilty/helper.utilty.js';
 import { Request } from '../models/request.models.js';
 import { User } from '../models/user.models.js';
 import { Product } from '../models/product.models.js';
+import { Transporter } from '../models/transporter.models.js';
 
 // Get hub manager profile (name and assigned hub)
 export const getProfile = catchAsync(async (req, res) => {
@@ -50,7 +51,7 @@ export const manageRequest = catchAsync(async (req, res) => {
     }
 
     const hubIdToCheck =
-        request.type === 'pickup' || request.type === 'print' || request.type === 'delivery'
+        request.type === 'pickup' || request.type === 'print' || request.type === 'delivery' || request.type === 'receive'
             ? product.fromHubId._id
             : product.toHubId._id;
 
@@ -72,16 +73,31 @@ export const manageRequest = catchAsync(async (req, res) => {
                 product.transporterId = request.userId;
                 product.status = 'Assigned';
                 request.status = 'Approved';
+                await Transporter.findOneAndUpdate({
+                    productId: product._id
+                },
+                    {
+                        status: 'on the way'
+                    }
+                )
                 break;
 
             case 'scan':
                 product.status = 'On the way';
                 product.locations.push({
                     hubId: product.fromHubId,
-                    action: 'scanned', // Add required action
+                    action: 'scanned',
                     timestamp: new Date(),
                 });
                 request.status = 'Approved';
+
+                await Transporter.findOneAndUpdate({
+                    productId: product._id
+                },
+                    {
+                        status: 'on the way'
+                    }
+                )
 
                 const scanTransporter = await User.findById(request.userId);
                 if (scanTransporter) {
@@ -95,10 +111,18 @@ export const manageRequest = catchAsync(async (req, res) => {
                 request.status = 'Approved';
                 product.locations.push({
                     hubId: product.toHubId,
-                    action: 'dispatched', 
+                    action: 'dispatched',
                     timestamp: new Date(),
                 });
                 product.status = 'Reached';
+
+                await Transporter.findOneAndUpdate({
+                    productId: product._id
+                },
+                    {
+                        status: 'completed'
+                    }
+                )
 
                 const deliveryTransporter = await User.findById(request.userId);
                 if (deliveryTransporter) {
@@ -109,20 +133,10 @@ export const manageRequest = catchAsync(async (req, res) => {
                 break;
 
             case 'receive':
-                product.status = 'Pending Receipt Approval';
-                product.locations.push({
-                    hubId: product.toHubId,
-                    action: 'approve', // Add required action
-                    timestamp: new Date(),
-                });
-                request.status = 'Approved';
-                break;
-
-            case 'receive-scan':
                 product.status = 'Received';
                 product.locations.push({
                     hubId: product.toHubId,
-                    action: 'received-scan', // Add required action
+                    action: 'received',
                     timestamp: new Date(),
                 });
                 request.status = 'Approved';
@@ -140,6 +154,14 @@ export const manageRequest = catchAsync(async (req, res) => {
         }
 
         request.isAccepted = true;
+        // Notify requester
+        await createNotification(
+            request.userId,
+            `Your ${request.type} request for product ${product.uniqueCode} has been approved`,
+            'request',
+            product._id,
+            'Product'
+        );
     } else if (action === 'reject') {
         request.status = 'Rejected';
         request.isAccepted = false;
@@ -148,6 +170,15 @@ export const manageRequest = catchAsync(async (req, res) => {
             product.status = 'Canceled';
             await product.save();
         }
+
+        // Notify requester
+        await createNotification(
+            request.userId,
+            `Your ${request.type} request for product ${product.uniqueCode} has been rejected`,
+            'request',
+            product._id,
+            'Product'
+        );
     } else {
         throw new AppError(400, 'Invalid action');
     }
@@ -155,13 +186,6 @@ export const manageRequest = catchAsync(async (req, res) => {
     // Save changes
     await product.save();
     await request.save();
-
-    // Debug the final state
-    console.log('Final Saved Request:', {
-        id: request._id,
-        status: request.status,
-        isAccepted: request.isAccepted,
-    });
 
     sendResponse(res, {
         statusCode: 200,
@@ -206,9 +230,12 @@ const fetchRequests = async (req, types) => {
     // Filter requests for the hub manager's hub
     let filteredRequests = requests.filter((request) => {
         const product = request.productId;
-        const hubIdToCheck = types.includes('pickup') || types.includes('print') || types.includes('delivery') || types.includes('receive') ?product.fromHubId._id : product.toHubId._id;
+        console.log(request);
+        const hubIdToCheck = types.includes('pickup') || types.includes('print') || types.includes('delivery') || types.includes('receive') ? product.fromHubId._id : product.toHubId._id;
         return hubIdToCheck.toString() === req.user.hubId.toString();
+
     });
+
 
     // Search filter (product code, shipper name, receiver name)
     if (search) {

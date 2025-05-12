@@ -1,11 +1,12 @@
 import catchAsync from '../utilty/catchAsync.js';
 import AppError from '../errors/AppError.js';
-import { sendResponse, generateUniqueCode, calculateDistance, calculateAmount, uploadOnCloudinary } from '../utilty/helper.utilty.js';
+import { sendResponse, generateUniqueCode, calculateDistance, calculateAmount, uploadOnCloudinary, createNotification } from '../utilty/helper.utilty.js';
 import { Hub } from '../models/hubs.models.js';
 import { User } from '../models/user.models.js';
 import { Product } from '../models/product.models.js';
 import { Request } from '../models/request.models.js';
 import mongoose from 'mongoose';
+import { Transporter } from '../models/transporter.models.js';
 
 // Create a new shipment (User acting as shipper)
 export const createShipment = catchAsync(async (req, res) => {
@@ -33,7 +34,7 @@ export const createShipment = catchAsync(async (req, res) => {
     const uniqueCode = await generateUniqueCode();
     const distance = calculateDistance(fromHub.coordinates, toHub.coordinates);
     const amount = calculateAmount(weight, distance);
-    const transporterAmount = parseFloat(amount * 0.3); 
+    const transporterAmount = parseFloat(amount * 0.3);
 
     const product = new Product({
         uniqueCode,
@@ -46,10 +47,19 @@ export const createShipment = catchAsync(async (req, res) => {
         shipperId: req.user._id,
         receiverId,
         amount,
-        transporterAmount, 
+        transporterAmount,
     });
 
     await product.save();
+
+    // Notify receiver
+    await createNotification(
+        receiverId,
+        `New shipment created for you (${product.uniqueCode})`,
+        'shipment',
+        product._id,
+        'Product'
+    );
 
     const shipper = await User.findById(req.user._id);
     shipper.totalProductsShipped += 1;
@@ -244,7 +254,7 @@ export const scanBarcodeAndTakeProduct = catchAsync(async (req, res) => {
         throw new AppError(400, 'Product ID and scanned code are required');
     }
 
-    const product = await Product.findOne({ _id: productId, status: 'Pending' }).select('uniqueCode name weight measurement transporterAmount');
+    const product = await Product.findOne({ _id: productId, status: 'Pending' }).select('uniqueCode name weight toHubId fromHubId measurement transporterAmount');
     if (!product) {
         throw new AppError(404, 'Product not found or already taken');
     }
@@ -257,12 +267,41 @@ export const scanBarcodeAndTakeProduct = catchAsync(async (req, res) => {
     product.transporterId = req.user._id;
     await product.save();
 
+    // Notify shipper
+    await createNotification(
+        product.shipperId,
+        `Your product ${product.uniqueCode} has been picked up by a transporter`,
+        'shipment',
+        product._id,
+        'Product'
+    );
+
+    // Notify receiver
+    await createNotification(
+        product.receiverId,
+        `Your product ${product.uniqueCode} is on the way`,
+        'shipment',
+        product._id,
+        'Product'
+    );
+
     const request = new Request({
         productId,
         userId: req.user._id,
         type: 'pickup',
     });
     await request.save();
+
+    console.log(request);
+    console.log(product);
+
+    await Transporter.create({
+        productId: product._id,
+        transporterId: req.user._id,
+        fromHubId: product.fromHubId,
+        toHubId: product.toHubId,
+        status: 'pending'
+    })
 
     sendResponse(res, {
         statusCode: 200,
@@ -292,11 +331,28 @@ export const submitProduct = catchAsync(async (req, res) => {
     });
     await request.save();
 
+    // Notify receiver
+    await createNotification(
+        product.receiverId,
+        `Your product ${product.uniqueCode} has reached the destination hub`,
+        'shipment',
+        product._id,
+        'Product'
+    );
+
+    await Transporter.create({
+        productId: product._id,
+        transporterId: req.user._id,
+        fromHub: product.fromHubId,
+        toHub: product.toHubId,
+        status: 'pending'
+    })
+
     sendResponse(res, {
         statusCode: 200,
         success: true,
         message: 'Submit request sent to hub manager',
-        data: {product, request},
+        data: { product, request },
     });
 });
 
@@ -305,7 +361,11 @@ export const getProductsToReceive = catchAsync(async (req, res) => {
     const reachedProducts = await Product.find({
         receiverId: req.user._id,
         status: 'Reached',
-    }).populate('fromHubId toHubId shipperId');
+    })
+        .populate({ path: 'fromHubId', select: 'name' })
+        .populate({ path: 'toHubId', select: 'name' })
+        .populate({ path: 'shipperId', select: 'name' })
+        .populate({ path: 'receiverId', select: 'name' });
 
     sendResponse(res, {
         statusCode: 200,
@@ -315,98 +375,72 @@ export const getProductsToReceive = catchAsync(async (req, res) => {
     });
 });
 
-// Request to receive a product (User acting as receiver)
-export const receiveProduct = catchAsync(async (req, res) => {
-    const { productId } = req.body;
-
-    if (!productId) {
-        throw new AppError(400, 'Product ID is required');
-    }
-
-    const product = await Product.findOne({ _id: productId, receiverId: req.user._id, status: 'Reached' });
-    if (!product) {
-        throw new AppError(404, 'Product not found or not ready to receive');
-    }
-
-    const request = new Request({
-        productId,
-        userId: req.user._id,
-        type: 'receive',
-    });
-    await request.save();
-
-    sendResponse(res, {
-        statusCode: 200,
-        success: true,
-        message: 'Receive request sent to hub manager',
-        data: request,
-    });
-});
-
-// Scan barcode to confirm receipt (User acting as receiver)
-export const scanBarcodeForReceipt = catchAsync(async (req, res) => {
+// Combined receive and scan controller
+export const receiveAndScanProduct = catchAsync(async (req, res) => {
     const { productId, scannedCode } = req.body;
 
+    // Validate input
     if (!productId || !scannedCode) {
         throw new AppError(400, 'Product ID and scanned code are required');
     }
 
-    const product = await Product.findOne({ _id: productId, receiverId: req.user._id });
+    // Find the product
+    const product = await Product.findOne({
+        _id: productId,
+        receiverId: req.user._id,
+        status: 'Reached'
+    });
+
     if (!product) {
-        throw new AppError(404, 'Product not found or not assigned to you');
+        throw new AppError(404, 'Product not found or not ready to receive');
     }
 
+    // Verify barcode
     if (product.uniqueCode !== parseInt(scannedCode)) {
         throw new AppError(400, 'Invalid barcode');
     }
 
-    product.status = 'Received';
+    // Create a receive-scan request for hub manager approval
+    const request = new Request({
+        productId,
+        userId: req.user._id,
+        type: 'receive',
+        status: 'Pending Approval'
+    });
+    await request.save();
+
+        // Notify shipper
+    await createNotification(
+        product.shipperId,
+        `Your product ${product.uniqueCode} is being delivered to the receiver`,
+        'shipment',
+        product._id,
+        'Product'
+    );
+
+    // Update product status to indicate waiting for approval
+    product.status = 'Pending Receipt Approval';
     await product.save();
 
     sendResponse(res, {
         statusCode: 200,
         success: true,
-        message: 'Barcode scanned successfully. Product marked as received.',
-        data: { product },
+        message: 'Product scanned successfully. Waiting for hub manager approval.',
+        data: { product, request }
     });
 });
 
 // Get user history (Shipper, Transporter, Receiver history)
 export const getHistory = catchAsync(async (req, res) => {
-    const shipped = await Product.find({ shipperId: req.user._id }).populate('fromHubId toHubId');
-    const transported = await Product.find({ transporterId: req.user._id }).populate('fromHubId toHubId');
-    const received = await Product.find({ receiverId: req.user._id }).populate('fromHubId toHubId');
+    const shipped = await Product.find({ shipperId: req.user._id }).populate('fromHubId toHubId', 'name')
+    const transported = await Product.find({ transporterId: req.user._id }).populate('fromHubId toHubId', 'name');
+    const received = await Product.find({ receiverId: req.user._id }).populate('fromHubId toHubId', 'name');
 
     sendResponse(res, {
         statusCode: 200,
         success: true,
         message: 'User history retrieved successfully',
         data: { shipped, transported, received },
-    });
-});
-
-// Get live location of a product
-export const getProductLocation = catchAsync(async (req, res) => {
-    const { productId } = req.params;
-
-    const product = await Product.findOne({
-        _id: productId,
-        $or: [
-            { shipperId: req.user._id },
-            { transporterId: req.user._id },
-            { receiverId: req.user._id },
-        ],
-    }).populate('fromHubId toHubId locations.hubId');
-
-    if (!product) {
-        throw new AppError(404, 'Product not found or access denied');
-    }
-
-    sendResponse(res, {
-        statusCode: 200,
-        success: true,
-        message: 'Product location retrieved successfully',
-        data: { product, locations: product.locations },
     });
 });
 
@@ -423,34 +457,30 @@ export const getProfile = catchAsync(async (req, res) => {
 
 // Edit Profile
 export const editProfile = catchAsync(async (req, res) => {
-    const { name, email } = req.body;
+    const { name } = req.body;
 
-    if (!name || !email) {
-        throw new AppError(400, 'Name and email are required');
-    }
+    const updateData = {};
+
+    if (name) updateData.name = name;
 
     if (req.file) {
         try {
             const image = await uploadOnCloudinary(req.file.buffer, 'users');
-            req.body.image = image.secure_url;
+            updateData.image = image.secure_url;
         } catch (error) {
             throw new AppError(500, 'Error uploading image');
         }
     }
 
-    const user = await User.findById(req.user._id);
-    if (await User.findOne({ email, _id: { $ne: req.user._id } })) {
-        throw new AppError(400, 'Email already in use');
+    const user = await User.findByIdAndUpdate(
+        req.user._id,
+        updateData,
+        { new: true, runValidators: true }
+    ).select('name username image');
+
+    if (!user) {
+        throw new AppError(404, 'User not found');
     }
-
-    user.name = name;
-    user.email = email;
-
-    if (req.body.image) {
-        user.image = req.body.image;
-    }
-
-    await user.save();
 
     sendResponse(res, {
         statusCode: 200,

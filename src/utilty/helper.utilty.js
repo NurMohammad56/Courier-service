@@ -1,7 +1,9 @@
 import dotenv from 'dotenv';
-import {Product} from '../models/product.models.js';
+import { Product } from '../models/product.models.js';
 import { v2 as cloudinary } from "cloudinary";
 import nodemailer from 'nodemailer';
+import { Notification } from '../models/notification.models.js';
+import { io } from '../../././server.js';
 dotenv.config();
 
 let codeCounter = 202000;
@@ -76,24 +78,50 @@ export const sendPasswordResetCode = async (email, code) => {
 
 // Cloudinary setup
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
 // Upload on Cloudinary method
 export const uploadOnCloudinary = (fileBuffer) => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      { resource_type: "image" },
-      (error, result) => {
-        if (error) {
-          console.error("Cloudinary upload error:", error);
-          return reject(error);
-        }
-        resolve(result);
-      }
+    return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+            { resource_type: "image" },
+            (error, result) => {
+                if (error) {
+                    console.error("Cloudinary upload error:", error);
+                    return reject(error);
+                }
+                resolve(result);
+            }
+        );
+        stream.end(fileBuffer);
+    });
+};
+
+export const createNotification = async (userId, message, type) => {
+    try {
+        const notification = await Notification.create({
+            userId,
+            message,
+            type
+        });
+
+        // Emit real-time notification
+        io.to(`user_${userId}`).emit('newNotification', notification);
+
+        return notification;
+    } catch (error) {
+        console.error('Error creating notification:', error);
+        return null;
+    }
+};
+
+export const markAsRead = async (notificationId, userId) => {
+    return await Notification.findOneAndUpdate(
+        { _id: notificationId, userId },
+        { isRead: true },
+        { new: true }
     );
-    stream.end(fileBuffer);
-  });
 };

@@ -6,16 +6,15 @@ import {
   scanBarcodeAndTakeProduct,
   submitProduct,
   getProductsToReceive,
-  receiveProduct,
-  scanBarcodeForReceipt,
+  receiveAndScanProduct,
   getHistory,
-  getProductLocation,
   editProfile,
   getProfile,
   changePassword,
 } from '../controllers/user.controllers.js';
 import { updateLocation, getLiveLocation} from '../controllers/location.controllers.js';
 import { isAuthenticated, restrictTo } from '../middlewares/auth.middlewares.js';
+import upload from '../middlewares/multer.middlewares.js';
 
 const router = express.Router();
 
@@ -28,14 +27,12 @@ router.get('/pending-products', getPendingProducts);
 router.post('/scan-barcode', scanBarcodeAndTakeProduct);
 router.post('/submit-product', submitProduct);
 router.get('/products-to-receive', getProductsToReceive);
-router.post('/receive-product', receiveProduct);
-router.post('/scan-barcode-receipt', scanBarcodeForReceipt);
+router.post('/scan-barcode-receipt', receiveAndScanProduct);
 router.get('/history', getHistory);
-router.get('/location/:productId', getProductLocation);
-router.put('/update-location', updateLocation);
+router.patch('/update-location', updateLocation);
 router.get('/live-location/:productId', getLiveLocation);
 router.get('/profile', getProfile);
-router.put('/edit-profile', editProfile);
-router.put('/change-password', changePassword);
+router.put('/edit-profile', upload.single('image'),editProfile);
+router.post('/change-password', changePassword);
 
 export default router;
