@@ -153,7 +153,7 @@ export const forgotPassword = catchAsync(async (req, res) => {
     });
 });
 
-// Verify Reset Code
+// Verify Code
 export const verifyResetCode = catchAsync(async (req, res) => {
     const { userId, code } = req.body;
 
