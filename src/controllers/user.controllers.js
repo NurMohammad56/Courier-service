@@ -78,13 +78,13 @@ export const createShipment = catchAsync(async (req, res) => {
             status: product.status,
             amount: product.amount,
             transporterAmount: product.transporterAmount,
-            fromHubId: {
+            fromHub: {
                 _id: fromHub._id,
                 name: fromHub.name,
                 hubCode: fromHub.hubCode,
                 coordinates: fromHub.coordinates,
             },
-            toHubId: {
+            toHub: {
                 _id: toHub._id,
                 name: toHub.name,
                 hubCode: toHub.hubCode,
