@@ -1,4 +1,5 @@
 import catchAsync from '../utilty/catchAsync.js';
+import validation from '../utilty/validation_check.js';
 import AppError from '../errors/AppError.js';
 import { sendResponse, generateVerificationCode, sendVerificationCode, sendPasswordResetCode } from '../utilty/helper.utilty.js';
 import { User } from '../models/user.models.js';
@@ -11,6 +12,14 @@ export const registerStep1 = catchAsync(async (req, res) => {
     if (!name || !email || !password) {
         throw new AppError(400, 'All fields are required');
     }
+
+    if(!validation.isValidEmail(email)){
+        throw new AppError(422, "Not a valid email format!");
+    }
+
+    // if(!validation.isStrongPassword(password)) {
+    //     throw new AppError(422, "Weak password!");
+    // }
 
     if (await User.findOne({ email })) {
         throw new AppError(400, 'Email already in use');
@@ -97,7 +106,7 @@ export const login = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Login successful',
-        data: { accessToken, refreshToken },
+        data: { accessToken, refreshToken, userId: user._id },
     });
 });
 
@@ -143,25 +152,25 @@ export const forgotPassword = catchAsync(async (req, res) => {
     user.resetCode = resetCode;
     await user.save();
 
-    await sendPasswordResetCode(email, resetCode);
+    //await sendPasswordResetCode(email, resetCode);
 
     sendResponse(res, {
         statusCode: 200,
         success: true,
         message: 'Password reset code sent to email',
-        data: { userId: user._id },
+        data: null,
     });
 });
 
 // Verify Code
 export const verifyResetCode = catchAsync(async (req, res) => {
-    const { userId, code } = req.body;
+    const { email, code } = req.body;
 
-    if (!userId || !code) {
-        throw new AppError(400, 'User ID and reset code are required');
+    if (!email || !code) {
+        throw new AppError(400, 'Email and reset code are required');
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findOne({ email });
     if (!user) {
         throw new AppError(404, 'User not found');
     }
@@ -174,7 +183,9 @@ export const verifyResetCode = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Reset code verified successfully',
-        data: userId,
+        data: {
+            userId: user._id
+        },
     });
 });
 
