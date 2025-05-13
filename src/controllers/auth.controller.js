@@ -1,4 +1,5 @@
 import catchAsync from '../utilty/catchAsync.js';
+import validation from '../utilty/validation_check.js';
 import AppError from '../errors/AppError.js';
 import { sendResponse, generateVerificationCode, sendVerificationCode, sendPasswordResetCode } from '../utilty/helper.utilty.js';
 import { User } from '../models/user.models.js';
@@ -8,11 +9,17 @@ import jwt from 'jsonwebtoken';
 export const registerStep1 = catchAsync(async (req, res) => {
     const { name, email, password, phone } = req.body;
 
-    console.log("Someone is registering", req.body);
-
     if (!name || !email || !password) {
         throw new AppError(400, 'All fields are required');
     }
+
+    if(!validation.isValidEmail(email)){
+        throw new AppError(422, "Not a valid email format!");
+    }
+
+    // if(!validation.isStrongPassword(password)) {
+    //     throw new AppError(422, "Weak password!");
+    // }
 
     if (await User.findOne({ email })) {
         throw new AppError(400, 'Email already in use');
@@ -29,7 +36,7 @@ export const registerStep1 = catchAsync(async (req, res) => {
 
     await user.save();
 
-    //await sendVerificationCode(email, verificationCode);
+    await sendVerificationCode(email, verificationCode);
 
     sendResponse(res, {
         statusCode: 200,
@@ -177,7 +184,7 @@ export const verifyResetCode = catchAsync(async (req, res) => {
         success: true,
         message: 'Reset code verified successfully',
         data: {
-            "userId": user._id
+            userId: user._id
         },
     });
 });
