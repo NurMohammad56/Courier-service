@@ -9,6 +9,7 @@ import notFound from './src/middlewares/notFound.middlewares.js';
 import routes from './config/route.config.js';
 import { Product } from './src/models/product.models.js';
 const PORT = process.env.PORT || 5001;
+const HOST = '0.0.0.0'; // Binds to all network interfaces
 
 const app = express();
 const server = createServer(app);
@@ -131,7 +132,7 @@ app.use("/api/v1", routes);
 app.use(globalErrorHandler);
 app.use(notFound);
 
-server.listen(PORT, async () => {
+server.listen(PORT, HOST, async () => {
     await dbConnection();
     console.log(`Server is running on port http://localhost:${PORT}`);
 });

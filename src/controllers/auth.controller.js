@@ -145,25 +145,25 @@ export const forgotPassword = catchAsync(async (req, res) => {
     user.resetCode = resetCode;
     await user.save();
 
-    await sendPasswordResetCode(email, resetCode);
+    //await sendPasswordResetCode(email, resetCode);
 
     sendResponse(res, {
         statusCode: 200,
         success: true,
         message: 'Password reset code sent to email',
-        data: { userId: user._id },
+        data: null,
     });
 });
 
 // Verify Reset Code
 export const verifyResetCode = catchAsync(async (req, res) => {
-    const { userId, code } = req.body;
+    const { email, code } = req.body;
 
-    if (!userId || !code) {
-        throw new AppError(400, 'User ID and reset code are required');
+    if (!email || !code) {
+        throw new AppError(400, 'Email and reset code are required');
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findOne({ email });
     if (!user) {
         throw new AppError(404, 'User not found');
     }
@@ -176,7 +176,9 @@ export const verifyResetCode = catchAsync(async (req, res) => {
         statusCode: 200,
         success: true,
         message: 'Reset code verified successfully',
-        data: null,
+        data: {
+            "userId": user._id
+        },
     });
 });
 
