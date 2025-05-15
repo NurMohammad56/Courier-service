@@ -11,6 +11,7 @@ import {
   editProfile,
   getProfile,
   changePassword,
+  getOngoingShipments
 } from '../controllers/user.controllers.js';
 import { updateLocation, getLiveLocation} from '../controllers/location.controllers.js';
 import { isAuthenticated, restrictTo } from '../middlewares/auth.middlewares.js';
@@ -26,6 +27,7 @@ router.post('/request-print', requestPrint);
 router.get('/pending-products', getPendingProducts);
 router.post('/scan-barcode', scanBarcodeAndTakeProduct);
 router.post('/submit-product', submitProduct);
+router.get('/ongoing-shipments', getOngoingShipments);
 router.get('/products-to-receive', getProductsToReceive);
 router.post('/scan-barcode-receipt', receiveAndScanProduct);
 router.get('/history', getHistory);
