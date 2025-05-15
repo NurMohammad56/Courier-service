@@ -409,7 +409,7 @@ export const receiveAndScanProduct = catchAsync(async (req, res) => {
     });
     await request.save();
 
-        // Notify shipper
+    // Notify shipper
     await createNotification(
         product.shipperId,
         `Your product ${product.uniqueCode} is being delivered to the receiver`,
@@ -517,3 +517,17 @@ export const changePassword = catchAsync(async (req, res) => {
         data: null,
     });
 });
+
+// Get user ongoing shipments
+export const getOngoingShipments = catchAsync(async (req, res) => {
+    const shipments = await Product.find({
+        shipperId: req.user._id, status: { $in: ['Pending', 'Assigned', 'On the way', 'Reached', 'Pending Receipt Approval', 'Received', 'Canceled'] }
+    })
+        .populate('fromHubId toHubId', 'name').select('uniqueCode status name fromHubId toHubId');
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: 'Ongoing shipments retrieved successfully',
+        data: shipments,
+    });
+})
