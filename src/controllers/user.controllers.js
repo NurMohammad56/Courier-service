@@ -531,3 +531,14 @@ export const getOngoingShipments = catchAsync(async (req, res) => {
         data: shipments,
     });
 })
+// Get
+// Usecase: hubs to choose from
+export const availableHubs = catchAsync(async (req, res) => {
+    const hubs = await Hub.find();
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: `${hubs.length} hubs`,
+        data: hubs,
+    });
+})
