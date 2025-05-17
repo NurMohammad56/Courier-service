@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+  availableHubs,
   createShipment,
   requestPrint,
   getPendingProducts,
@@ -27,6 +28,7 @@ router.post('/request-print', requestPrint);
 router.get('/pending-products', getPendingProducts);
 router.post('/scan-barcode', scanBarcodeAndTakeProduct);
 router.post('/submit-product', submitProduct);
+router.get('/available-hubs', availableHubs);
 router.get('/ongoing-shipments', getOngoingShipments);
 router.get('/products-to-receive', getProductsToReceive);
 router.post('/scan-barcode-receipt', receiveAndScanProduct);

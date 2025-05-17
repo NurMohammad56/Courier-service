@@ -4,7 +4,9 @@ import {User} from '../models/user.models.js';
 
 export const isAuthenticated = async (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
+    
     if (!token) {
+        console.log(req);
         return next(new AppError(401, 'Authentication required'));
     }
 

@@ -6,6 +6,8 @@ export const getUserNotifications = catchAsync(async (req, res) => {
     const { limit = 20, page = 1 } = req.query;
     const skip = (page - 1) * limit;
 
+    console.log("User wants notifications");
+
     const notifications = await Notification.find({ userId: req.user._id })
         .sort({ createdAt: -1 })
         .skip(skip)

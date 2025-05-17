@@ -54,7 +54,7 @@ export const createShipment = catchAsync(async (req, res) => {
 
     // Notify receiver
     await createNotification(
-        receiverId,
+        req.user._id,
         `New shipment created for you (${product.uniqueCode})`,
         'shipment',
         product._id,
@@ -523,11 +523,35 @@ export const getOngoingShipments = catchAsync(async (req, res) => {
     const shipments = await Product.find({
         shipperId: req.user._id, status: { $in: ['Pending', 'Assigned', 'On the way', 'Reached', 'Pending Receipt Approval', 'Received', 'Canceled'] }
     })
-        .populate('fromHubId toHubId', 'name').select('uniqueCode status name fromHubId toHubId');
+        .populate('fromHubId toHubId').lean()
+
+    const updatedShipments = shipments.map(shipment => {
+        let fromHub = shipment.fromHubId
+        let toHub = shipment.toHubId;
+        delete shipment.fromHubId;
+        delete shipment.toHubId;
+        return {
+            ...shipment,
+            fromHub: fromHub,
+            toHub: toHub,
+        };
+    });
+
     sendResponse(res, {
         statusCode: 200,
         success: true,
         message: 'Ongoing shipments retrieved successfully',
-        data: shipments,
+        data: updatedShipments,
+    });
+})
+// Get
+// Usecase: hubs to choose from
+export const availableHubs = catchAsync(async (req, res) => {
+    const hubs = await Hub.find();
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: `${hubs.length} hubs`,
+        data: hubs,
     });
 })
