@@ -22,7 +22,7 @@ const io = new Server(server, {
 
 dotenv.config({ path: './.env' });
 
-app.use(express.json());
+app.use(express.json());   
 app.use(cors({
     origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE"],

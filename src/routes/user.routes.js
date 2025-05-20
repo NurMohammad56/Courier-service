@@ -12,7 +12,8 @@ import {
   editProfile,
   getProfile,
   changePassword,
-  getOngoingShipments
+  getOngoingShipments,
+  getOnTheWayProducts
 } from '../controllers/user.controllers.js';
 import { updateLocation, getLiveLocation} from '../controllers/location.controllers.js';
 import { isAuthenticated, restrictTo } from '../middlewares/auth.middlewares.js';
@@ -26,6 +27,7 @@ router.use(restrictTo('user'));
 router.post('/create-shipment', createShipment);
 router.post('/request-print', requestPrint);
 router.get('/pending-products', getPendingProducts);
+router.get('/on-the-way-products', getOnTheWayProducts);
 router.post('/scan-barcode', scanBarcodeAndTakeProduct);
 router.post('/submit-product', submitProduct);
 router.get('/available-hubs', availableHubs);
