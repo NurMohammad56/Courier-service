@@ -10,9 +10,22 @@ import { Transporter } from '../models/transporter.models.js';
 
 // Create a new shipment (User acting as shipper)
 export const createShipment = catchAsync(async (req, res) => {
-    const { fromHubId, toHubId, date, packageName, description, weight, measurement, receiverId } = req.body;
+    const { fromHubId, toHubId, date, packageName, description, weight, measurement, email } = req.body;
 
-    if (!fromHubId || !toHubId || !date || !packageName || !weight || !measurement || !receiverId) {
+    const userId = req.user._id;
+
+    const receiverId = await User.findOne({ email }).select('_id');
+
+    if (!receiverId) {
+        throw new AppError(404, 'Receiver not found');
+    }
+
+    // Validate input
+    if (userId.toString() === receiverId._id.toString()) {
+        throw new AppError(400, 'Receiver cannot be the same as shipper');
+    }
+
+    if (!fromHubId || !toHubId || !date || !packageName || !weight || !measurement || !email) {
         throw new AppError(400, 'All fields are required');
     }
 
@@ -45,7 +58,7 @@ export const createShipment = catchAsync(async (req, res) => {
         fromHubId,
         toHubId,
         shipperId: req.user._id,
-        receiverId,
+        receiverId: receiverId._id,
         amount,
         transporterAmount,
     });
@@ -117,15 +130,17 @@ export const requestPrint = catchAsync(async (req, res) => {
         throw new AppError(400, 'Product ID and Hub ID are required');
     }
 
-    const product = await Product.findById(productId);
-    if (!product) {
-        throw new AppError(404, 'Product not found');
-    }
-
     const hub = await Hub.findOne({ hubCode });
     if (!hub) {
         throw new AppError(404, 'Hub not found');
     }
+
+
+    const product = await Product.findOne({ _id: productId, fromHubId: hub._id });
+    if (!product) {
+        throw new AppError(404, 'Product not found');
+    }
+
 
     // Check if this product already has a pending print request
     const existingRequest = await Request.findOne({
@@ -544,7 +559,7 @@ export const getOngoingShipments = catchAsync(async (req, res) => {
         data: updatedShipments,
     });
 })
-// Get
+
 // Usecase: hubs to choose from
 export const availableHubs = catchAsync(async (req, res) => {
     const hubs = await Hub.find();
@@ -553,5 +568,35 @@ export const availableHubs = catchAsync(async (req, res) => {
         success: true,
         message: `${hubs.length} hubs`,
         data: hubs,
+    });
+})
+
+// Get on the way products (User acting as transporter)
+export const getOnTheWayProducts = catchAsync(async (req, res) => {
+    const products = await Product.find({
+        transporterId: req.user._id,
+        status: { $in: ['On the way', 'Assigned'] }
+    })
+        .populate('fromHubId toHubId shipperId receiverId', 'name')
+        .select('name uniqueCode weight measurement transporterAmount fromHubId toHubId shipperId receiverId')
+        .lean();
+
+    const updatedProducts = products.map(product => {
+        let fromHub = product.fromHubId
+        let toHub = product.toHubId;
+        delete product.fromHubId;
+        delete product.toHubId;
+        return {
+            ...product,
+            fromHub: fromHub,
+            toHub: toHub,
+        };
+    });
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: 'On the way products retrieved successfully',
+        data: updatedProducts,
     });
 })
