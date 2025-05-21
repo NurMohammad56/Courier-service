@@ -413,13 +413,14 @@ export const getTopHubStats = catchAsync(async (req, res) => {
         { $limit: 5 }
     ]);
 
+    const combinedTopHubs = [...topReceivers, ...topSenders];
+
     sendResponse(res, {
         statusCode: 200,
         success: true,
         message: `Top receiver and sender hubs for ${month} retrieved successfully`,
         data: {
-            topReceivers,
-            topSenders
+            combinedTopHubs
         }
     });
 });
