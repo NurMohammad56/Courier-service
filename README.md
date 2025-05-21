@@ -2,9 +2,6 @@
 
 A complete backend system for managing product delivery logistics between hubs. Built using **Node.js**, **Express**, and **MongoDB** with real-time tracking, and detailed status management.
 
-## Postman Documentation
-https://documenter.getpostman.com/view/42737621/2sB2jAa7Pd
-
 ## Features
 
 - JWT-based Authentication (User, Hub Manager, Admin)
