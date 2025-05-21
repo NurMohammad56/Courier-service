@@ -413,15 +413,24 @@ export const getTopHubStats = catchAsync(async (req, res) => {
         { $limit: 5 }
     ]);
 
-    const combinedTopHubs = [...topReceivers, ...topSenders];
+    const maxLength = Math.max(topReceivers.length, topSenders.length);
+    const combinedHubList = [];
+
+    for (let i = 0; i < maxLength; i++) {
+        combinedHubList.push({
+            topReceiverHub: topReceivers[i]?.hubName || null,
+            totalReceived: topReceivers[i]?.totalProduct || 0,
+            topSenderHub: topSenders[i]?.hubName || null,
+            totalSent: topSenders[i]?.totalProduct || 0
+        });
+    }
+
 
     sendResponse(res, {
         statusCode: 200,
         success: true,
         message: `Top receiver and sender hubs for ${month} retrieved successfully`,
-        data: {
-            combinedTopHubs
-        }
+        data: combinedHubList
     });
 });
 
